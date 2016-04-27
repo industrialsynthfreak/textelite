@@ -3,8 +3,9 @@ from collections import namedtuple
 
 class Randomizer:
     """
-    Randomizer class combines both sas and lcc original algorithms. The type should be specified
-    in class algorithm parameter.
+    Randomizer class combines both sas and lcc algorithms from the original code.
+    The type of used algorithm should be specified in class .algorithm attribute.
+    Should be used as class only.
     """
     next = 12345
     lr = 12345 - 1
@@ -22,8 +23,9 @@ class Randomizer:
         cls.lr -= 1
         return r
 
-    @staticmethod
-    def __new__(cls):
+    @classmethod
+    def get_value(cls):
+        """Returns a specific pseudo-random value"""
         if cls.algorithm == 'lcc':
             return cls.lcc()
         elif cls.algorithm == 'sas':
@@ -33,25 +35,36 @@ class Randomizer:
 
 
 class NameGenerator:
+    """
+    Should be used as class only.
+    """
     pairs0 = "ABOUSEITILETSTONLONUTHNO"
     pairs = "..LEXEGEZACEBISOUSESARMAINDIREA.ERATENBERALAVETIEDORQUANTEISRION"
     pairs1 = pairs0 + pairs
 
-    @staticmethod
-    def __new__(cls, sample):
+    @classmethod
+    def get_name(cls, sample, special_set=False):
+        """Returns a name string from a sample of random integers
+        :param iterable sample: sample of random integers
+        :param bool special_set: defines whether .pairs1 should be used (for non-planet names)
+        """
         name = ''
+        if special_set:
+            pairs = cls.pairs1
+        else:
+            pairs = cls.pairs
         for s in sample:
             i = s & 0x3e
-            name += cls.pairs1[i - 1: i + 1]
+            name += pairs[i:i+2]
         return name.replace('.', '')
 
 
 class PlanSys:
     """A planetary system"""
-    economy_types = ["Rich Ind", "Average Ind", "Poor Ind", "Mainly Ind",
-                     "Mainly Agri", "Rich Agri", "Average Agri", "Poor Agri"]
-    gov_types = ["Anarchy", "Feudal", "Multi-gov", "Dictatorship", "Communist",
-                 "Confederacy", "Democracy", "Corporate State"]
+    economy_types = ("Rich Ind", "Average Ind", "Poor Ind", "Mainly Ind",
+                     "Mainly Agri", "Rich Agri", "Average Agri", "Poor Agri")
+    gov_types = ("Anarchy", "Feudal", "Multi-gov", "Dictatorship", "Communist",
+                 "Confederacy", "Democracy", "Corporate State")
     goatsoup_template = "\x8F is \x97."
     desc_list = {
         "\x81": ["fabled", "notable", "well known", "famous", "noted"],
@@ -124,8 +137,6 @@ class PlanSys:
         """Generate a random number for goat-soup.
            Uses own algorithm so results are consistent and
            platform independant.
-
-           original algorithm from the game
         """
         x = (self.gs[0] * 2) & 0xFF
         a = x + self.gs[2]
@@ -133,7 +144,7 @@ class PlanSys:
             a += 1
         self.gs[0] = a & 0xFF
         self.gs[2] = x
-        a //= 256  # a = any carry left from above
+        a //= 256
         x = self.gs[1]
         a = (a + x + self.gs[3]) & 0xFF
         self.gs[1] = a
@@ -142,16 +153,24 @@ class PlanSys:
 
     @property
     def goatsoup(self):
+        """
+        Planet description property.
+        :return: str description
+        """
 
         def _char_check(s):
             if s == '\xB0':
                 return self.name.capitalize()
             elif s == '\xB1':
-                return self.name.capitalize() + 'ian'
+                if self.name[-1] in 'EUIOA':
+                    ns = self.name[:-1]
+                else:
+                    ns = self.name
+                return ns.capitalize() + 'ian'
             elif s == '\xB2':
                 l = self.gen_rnd_number() & 3
                 sample = (self.gen_rnd_number() for _ in range(l))
-                return NameGenerator(sample).capitalize()
+                return NameGenerator.get_name(sample, special_set=True).capitalize()
             elif s in self.desc_list:
                 return self.desc_list[s][self.gen_rnd_number() % 5]
             else:
@@ -180,12 +199,12 @@ class PlanSys:
         Government: {gov_desc}
         Tech Level: {tech}
         Turnover: {prod} MCR
-        Radius: {r} km
-        Population: {pop} Bil
-        "{goat}" (c) The Hitchhiker Guide
+        Radius: {r} KM
+        Population: {pop:.1f} BIL
+        "{goat}" (c) The Hitchhiker's Guide
         '''.format(name=self.name, x=self.x, y=self.y, eco_desc=self.economy_description,
                    gov_desc=self.government_description, tech=self.techlev + 1, prod=self.productivity,
-                   r=self.radius, pop=self.population, goat=self.goatsoup)
+                   r=self.radius, pop=self.population / 10, goat=self.goatsoup)
         return desc
 
     def description(self, short=True):
@@ -197,6 +216,7 @@ class PlanSys:
 
 
 class Galaxy:
+
     class Seed:
         """A pseudo-random number holder based on 16 bit numbers."""
 
@@ -214,10 +234,18 @@ class Galaxy:
 
             return (256 * rotate(x >> 8)) + rotate(x & 255)
 
-        def __init__(self):
-            self.w0 = 0
-            self.w1 = 0
-            self.w2 = 0
+        def __init__(self, w0=0x5A4A, w1=0x0248, w2=0xB753):
+            self.w0 = w0
+            self.w1 = w1
+            self.w2 = w2
+
+        def __str__(self):
+            return '{}/{}/{}'.format(self.w0, self.w1, self.w2)
+
+        def twist_all(self):
+            self.w0 = self.twist(self.w0)
+            self.w1 = self.twist(self.w1)
+            self.w2 = self.twist(self.w2)
 
         def shuffle(self):
             """Pseudo Randomize a seed"""
@@ -233,37 +261,36 @@ class Galaxy:
            seed value for galaxy one. If you want a later galaxy you have to
            advance through to get it.
         """
-        self.seed = self.Seed()
         self.galaxy_number = None
-        self.set_galaxy_1()
-        self.systems = self.make_systems()
+        self.seed = None
+        self.systems = None
+        self.set_galaxy(1)
 
     def make_systems(self):
-        return [self.make_system(i) for i in range(256)]
+        self.systems = [self.make_system(i) for i in range(256)]
+        print(self.galaxy_number)
+        print(sorted([s.name for s in self.systems]))
 
-    def goto_galaxy(self, number):
-        self.set_galaxy_1()
-        for i in range(2, number + 1):
-            self.next_galaxy()
-        self.galaxy_number = number % 8
-        self.systems = self.make_systems()
-
-    def set_galaxy_1(self):
-        """Set base seed for galaxy 1"""
-        self.seed.w0 = 0x5A4A
-        self.seed.w1 = 0x0248
-        self.seed.w2 = 0xB753
-        self.galaxy_number = 1
-
-    def next_galaxy(self):
-        """Apply to galaxy1 seed once for galaxy 2, twice for galaxy 3 etc
-           Eighth application gives galaxy 1 again"""
-        ss = self.seed
-        ss.w0 = ss.twist(ss.w0)
-        ss.w1 = ss.twist(ss.w1)
-        ss.w2 = ss.twist(ss.w2)
+    def set_galaxy(self, num: int):
+        """Set base seed for galaxy
+        :param int num: galaxy number
+        """
+        self.seed = self.Seed()
+        for __ in range(2, num + 1):
+            self.seed.twist_all()
+        self.galaxy_number = num % 8
+        self.make_systems()
 
     def make_system(self, system_number):
+        """
+        Creates a system with a specific number.
+        System data seems ok for a classic Elite, but doesn't match Elite+
+        (for example: Orerve/Orrere, different tech levels, pop and productivity).
+        I also tweaked a goatsoup string generation a bit, so planet descriptions
+        probably won't match original ones (but the game don't use them anyway).
+        :param int system_number:
+        :return: PlanSys instance
+        """
         s = self.seed
         x, y = s.w1 >> 8, s.w0 >> 8
         long_name_flag = bool(s.w0 & 64)
@@ -277,11 +304,11 @@ class Galaxy:
         productivity = (((economy & 7) + 3) * (govtype + 4)) * population * 8
         radius = 256 * (((s.w2 >> 8) & 15) + 11) + x
         goatseed = [s.w1 & 0xFF, s.w1 >> 8, s.w2 & 0xFF, s.w2 >> 8]
-        pairs = []
-        for i in range(4):
-            pairs.append((s.w2 >> 8) & 31)
+        sample = []
+        for __ in range(4):
+            sample.append(2 * ((s.w2 >> 8) & 31))
             s.shuffle()
-        name = ''.join([NameGenerator.pairs[i:i + 2] for i in pairs[:4-long_name_flag]]).replace('.', '')
+        name = NameGenerator.get_name(sample[:3+long_name_flag])
         return PlanSys(system_number, x, y, name, economy, govtype,
                        techlev, population, productivity, radius, goatseed)
 
@@ -445,7 +472,7 @@ class TradingGame:
         self.ship.fuel -= distance
         self.move_to(dest)
 
-        r = Randomizer()
+        r = Randomizer.get_value()
         fluct = self.char(r & 0xFF)
         self.generate_market(fluct)
 
@@ -464,8 +491,7 @@ class TradingGame:
 
     def next_galaxy(self):
         """Galactic hyperspace to next galaxy"""
-        self.galaxy.goto_galaxy(self.galaxy.galaxy_number + 1) #We stay on the same planet number, just jump
-        #In the sources jumping to a new galaxy leaves you with the same market
+        self.galaxy.set_galaxy(self.galaxy.galaxy_number + 1)
         self.generate_market()
 
     def display_market(self):
