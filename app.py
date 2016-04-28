@@ -10,6 +10,47 @@ class TradingGameCmd(Cmd):
     """Command interface to a TradingGame"""
     prompt = "> "
 
+    @staticmethod
+    def _check_value(value):
+        try:
+            value = float(value)
+        except ValueError:
+            print("Value must be a number")
+            return None
+        if value <= 0:
+            print("Nice try pilot.")
+            return None
+        else:
+            return value
+
+    def _check_good(self, line):
+        """
+        :param str line:
+        :return iterable:
+        """
+        line = line.strip().lower()
+
+        try:
+            good, number = line.split(' ')
+        except ValueError:
+            good = line
+            amt = 9999
+        else:
+            amt = self._check_value(number)
+            if not amt:
+                return False
+            amt = int(amt + 1)
+
+        if not good:
+            print('You must specify trade good')
+            return False
+        for commodity in self.game.localmarket.commodities:
+            if commodity.name.lower().startswith(good):
+                return commodity, amt
+        else:
+            print("Unknown trade good")
+            return False
+
     def __init__(self, debug=False):
         self.debug = debug
         Cmd.__init__(self)
@@ -54,36 +95,10 @@ class TradingGameCmd(Cmd):
         return self.do_mkt(line)
 
     def do_sell(self, line):
-        parts = line.strip().lower().split(' ')
-        try:
-            good = parts[0]
-        except IndexError:
-            print("Unknown trade good")
+        v = self._check_good(line)
+        if not v:
             return
-
-        try:
-            amt = int(parts[1])
-            if amt <= 0:
-                # Trying to sell a negative amt..
-                print("Nice try pilot.")
-                return
-        except IndexError:
-            amt = 1
-        except ValueError:
-            print("Unknown quantity")
-            return
-
-        commod = None
-        for commodity in self.game.localmarket.commodities:
-            if commodity.name.lower().startswith(good):
-                commod = commodity
-                break
-
-        if not commod:
-            print("Unknown trade good")
-            return
-
-        res = self.game.sell(commod, amt)
+        res = self.game.sell(*v)
         self.set_prompt()
         return res
 
@@ -91,55 +106,21 @@ class TradingGameCmd(Cmd):
         return self.do_sell(line)
 
     def do_buy(self, line):
-        parts = line.strip().lower().split(' ')
-        try:
-            good = parts[0]
-        except IndexError:
-            print("Unknown trade good")
+        v = self._check_good(line)
+        if not v:
             return
-
-        try:
-            amt = int(parts[1])
-            if amt <= 0:
-                print("Nice try pilot.")
-                return
-        except IndexError:
-            amt = 1
-        except ValueError:
-            print("Unknown quantity")
-            return
-
-        commod = None
-        for commodity in self.game.localmarket.commodities:
-            if commodity.name.lower().startswith(good):
-                commod = commodity
-                break
-
-        if not commod:
-            print("Unknown trade good")
-            return
-
-        ret = self.game.buy(commod, amt)
+        self.game.buy(*v)
         self.set_prompt()
-        return ret
+        return
 
     def do_b(self, line):
         return self.do_buy(line)
 
     def do_fuel(self, line):
-        try:
-            ly = float(line)
-        except ValueError:
-            print("Fuel LY to buy must be a number")
-            return
-
-        if ly < 0:
-            print("Nice try pilot.")
-            return
-
-        fuel, cost = self.game.buy_fuel(ly * 10)
-        self.set_prompt()
-        print("Refuelling {r} LY ({f} tonnes) cost {p} credits".format(r=fuel / 10.0, f=fuel, p=cost))
+        ly = self._check_value(line)
+        if ly:
+            print(self.game.buy_fuel(ly * 10))
+            self.set_prompt()
         return
 
     def do_f(self, line):
@@ -151,9 +132,14 @@ class TradingGameCmd(Cmd):
             print("System {name} could not be found.".format(name=systemname))
         else:
             print(psystem)
+        return
 
     def do_i(self, name):
         return self.do_info(name)
+
+    def do_com(self, line):
+        print(self.game.ship)
+        return
 
     def do_run(self, fname):
         import os
@@ -194,6 +180,7 @@ class TradingGameCmd(Cmd):
             jump  (or j) [planetname]          - hyperjump
             local (or l) - list of planets within the ship hyperjump range
             mkt   (or m) - show local market
+            com          - commander status
             galhyp       - jump to a next galaxy
 
             /// OTHER /////

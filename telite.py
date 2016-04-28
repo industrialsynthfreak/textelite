@@ -55,7 +55,7 @@ class NameGenerator:
             pairs = cls.pairs
         for s in sample:
             i = s & 0x3e
-            name += pairs[i:i+2]
+            name += pairs[i:i + 2]
         return name.replace('.', '')
 
 
@@ -199,12 +199,12 @@ class PlanSys:
         Government: {gov_desc}
         Tech Level: {tech}
         Turnover: {prod} MCR
-        Radius: {r} KM
-        Population: {pop:.1f} BIL
+        Diameter: {r}km
+        Population: {pop:.1f} Billion
         "{goat}" (c) The Hitchhiker's Guide
         '''.format(name=self.name, x=self.x, y=self.y, eco_desc=self.economy_description,
                    gov_desc=self.government_description, tech=self.techlev + 1, prod=self.productivity,
-                   r=self.radius, pop=self.population / 10, goat=self.goatsoup)
+                   r=2 * round(self.radius, -2), pop=self.population / 10, goat=self.goatsoup)
         return desc
 
     def description(self, short=True):
@@ -216,7 +216,6 @@ class PlanSys:
 
 
 class Galaxy:
-
     class Seed:
         """A pseudo-random number holder based on 16 bit numbers."""
 
@@ -227,7 +226,6 @@ class Galaxy:
 
         @staticmethod
         def twist(x):
-
             def rotate(v):
                 temp = v & 128
                 return (2 * (v & 127)) + (temp >> 7)
@@ -308,7 +306,7 @@ class Galaxy:
         for __ in range(4):
             sample.append(2 * ((s.w2 >> 8) & 31))
             s.shuffle()
-        name = NameGenerator.get_name(sample[:3+long_name_flag])
+        name = NameGenerator.get_name(sample[:3 + long_name_flag])
         return PlanSys(system_number, x, y, name, economy, govtype,
                        techlev, population, productivity, radius, goatseed)
 
@@ -361,7 +359,7 @@ class Market:
             self.unit = unit
             self.name = name
 
-    commodities = [
+    commodities = (
         Commodity(0x13, -0x02, 0x06, 0x01, Commodity.t, "Food        "),
         Commodity(0x14, -0x01, 0x0A, 0x03, Commodity.t, "Textiles    "),
         Commodity(0x41, -0x03, 0x02, 0x07, Commodity.t, "Radioactives"),
@@ -379,7 +377,7 @@ class Market:
         Commodity(0xAB, -0x02, 0x37, 0x1F, Commodity.kg, "Platinum    "),
         Commodity(0x2D, -0x01, 0xFA, 0x0F, Commodity.g, "Gem-Stones  "),
         Commodity(0x35, +0x0F, 0xC0, 0x07, Commodity.t, "Alien Items "),
-    ]
+    )
 
     def create_goods(self, system, fluct):
         for c in self.commodities:
@@ -406,15 +404,50 @@ class Market:
 
 class Ship:
     """A ship (by default a Cobra MkIII)"""
+    ship_descriptions = (
+        '''This ship is most commonly used by traders, although a few have been captured by pirates,
+        so a wise commander will be wary of even the quietest looking ships.
+        The standard Cobra hull is equipped with four missile pods, separate front and rear shields,
+        and provision for a cargo bay extension which increases the capacity of the hold.''',
+        '''Combat-trader craft favored latterly by pirates, the Mark I Cobra was the first trade ship
+        designed and built for the one-man trader. Its special feature at the time of manufacture
+        (by Paynou, Prossett and Salem) was its Prossett Drive, which incorporated afterburners with
+        proton-tightened, interior shaft walls. These are now a standard fitting for both internal
+        and external integuments of all PPS made craft.
+        ''',
+        '''Manufactured by Outworld Workshops, a rogue breakaway company from Spalder and Prime Inc.
+        which operates without license from an unknown location, the Adder-class craft has dual
+        atmospheric-spatial capability and is often used by smugglers. Pregg's "wingfolding" system
+        permits landing on planetary surfaces. Carries one missile.'''
+    )
+    Ship = namedtuple('Ship', ['name', 'holdsize', 'maxfuel', 'velocity', 'maneur', 'crew', 'hull', 'desc'])
+    ship_types = (
+        Ship('Cobra MkIII', 20, 70, 0.3, 8, 1, 18, ship_descriptions[0]),
+        Ship('Cobra MkI', 10, 70, 0.26, 3, 1, 18, ship_descriptions[1]),
+        Ship('Adder', 2, 70, 0.24, 4, 2, 28, ship_descriptions[2])
+    )
 
-    def __init__(self):
-        self.holdsize = 20
+    def __init__(self, ship_type='Cobra MkIII'):
+        self.ship = next((s for s in self.ship_types if s.name == ship_type), self.ship_types[0])
+        self.holdsize = self.ship.holdsize
+        self.maxfuel = self.ship.maxfuel
+        self.fuel = self.maxfuel
         self.cargo = {c.name: 0 for c in Market.commodities}
         self.cash = 100.0
-        self.maxfuel = 70
-        self.fuel = self.maxfuel
         self.galaxynum = 1
         self.planetnum = 7  # Lave
+
+    def __str__(self):
+        return '''
+        {name}
+        Fuel : {fuel}/{maxfuel}
+        Cash : {cash}
+        Ship : {ship.name}
+        Hull : T{ship.hull} | Maneurability : CF{ship.maneur} | Velocity : {ship.velocity} | Crew : {ship.crew}
+        {ship.desc}
+        '''.format(name=self.ship.name,
+                   fuel=int(self.fuel), maxfuel=self.maxfuel,
+                   cash=int(self.cash), ship=self.ship)
 
     @property
     def cargosize(self):
@@ -429,11 +462,12 @@ class Ship:
 
 class TradingGame:
     """Encodes rules of the game"""
+
     def __init__(self):
         self.ship = Ship()
         self.galaxy = Galaxy()
         self.localmarket = None
-        self.generate_market()      # Since we want seed=0 for Lave
+        self.generate_market()  # Since we want seed=0 for Lave
 
     def generate_market(self, fluct=0):
         self.localmarket = Market(self.current_system, fluct)
@@ -476,19 +510,6 @@ class TradingGame:
         fluct = self.char(r & 0xFF)
         self.generate_market(fluct)
 
-    def sneak(self, planetname):
-        fuelsafe = self.ship.fuel
-        self.ship.fuel = 666
-        self.jump(planetname)
-        self.ship.fuel = fuelsafe
-
-    def set_hold(self, newsize):
-        sm = self.ship.cargosize()
-        if sm > newsize:
-            print("Hold too full to shrink!")
-            return
-        self.ship.holdsize = newsize
-
     def next_galaxy(self):
         """Galactic hyperspace to next galaxy"""
         self.galaxy.set_galaxy(self.galaxy.galaxy_number + 1)
@@ -500,14 +521,13 @@ class TradingGame:
             lcl = self.localmarket.goods[c.name]
             current = self.ship.cargo[c.name]
             print('{name:15} {price:5.1f} {q:3d}{unit:<3} Hold: {current}'.format(name=c.name, price=lcl.price,
-                                                                               q=lcl.quantity,unit=c.unit.name,
-                                                                               current=current))
+                                                                                  q=lcl.quantity, unit=c.unit.name,
+                                                                                  current=current))
 
     def sell(self, commod, amt):
-        #Do we have any to sell?
         cargo = self.ship.cargo[commod.name]
         if cargo <= 0:
-            print("No {name} to sell.".format(commod.name))
+            print("No {name} to sell.".format(name=commod.name))
             return
 
         if amt > cargo:
@@ -518,8 +538,8 @@ class TradingGame:
         price = amt * local_market.price
         print("Selling {q}{u} of {name} for {p}".format(q=amt, u=commod.unit.name, name=commod.name, p=price))
         self.ship.cash = self.ship.cash + price
-        self.ship.cargo[commod.name] -= amt
-        local_market.quantity += amt
+        self.ship.cargo[commod.name] -= int(amt)
+        local_market.quantity += int(amt)
 
     def buy(self, commod, amt):
         local_market = self.localmarket.goods[commod.name]
@@ -533,7 +553,6 @@ class TradingGame:
                 q=amt, u=commod.unit.name, q2=lcl_amount))
             amt = lcl_amount
 
-        #How many can I afford?
         if local_market.price <= 0:
             can_have = amt
         else:
@@ -545,7 +564,6 @@ class TradingGame:
         if amt > can_have:
             amt = can_have
 
-        #How much will fit in the hold?
         if self.ship.hold_remaining < amt * commod.unit.mod:
             can_have = self.ship.hold_remaining
             if can_have <= 0:
@@ -557,32 +575,27 @@ class TradingGame:
                 amt = can_have
 
         price = amt * local_market.price
-        print("Buying {q}{u} of {name} for {p}".format(q=amt, u=commod.unit.name, name=commod.name, p=price))
+        print("Buying {q}{u} of {name} for {p:.1f}".format(q=amt, u=commod.unit.name, name=commod.name, p=price))
         self.ship.cash -= price
-        self.ship.cargo[commod.name] += amt
-        local_market.quantity -= amt
+        self.ship.cargo[commod.name] += int(amt)
+        local_market.quantity -= int(amt)
 
     def buy_fuel(self, f):
         if f + self.ship.fuel > self.ship.maxfuel:
             f = self.ship.maxfuel - self.ship.fuel
 
         if f <= 0:
-            print("Your fuel tank is full ({f} tonnes / {r} LY Range)".format(f=self.ship.fuel, r=self.ship.fuel / 10.0))
-            return 0, 0
-
-        # Find out what system we're at because fuelcost is there.
-        this_sys = self.current_system
-
-        cost = this_sys.fuelcost * f
+            return "Your fuel tank is full ({f} tonnes / {r} LY Range)".format(f=self.ship.fuel,
+                                                                               r=self.ship.fuel / 10.0)
+        cost = self.current_system.fuelcost * f
 
         if self.ship.cash > 0:
             if cost > self.ship.cash:
-                f = self.ship.cash / this_sys.fuelcost
-                cost = this_sys.fuelcost * f
+                f = self.ship.cash / self.current_system.fuelcost
+                cost = self.current_system.fuelcost * f
         else:
-            print("You can't afford any fuel")
-            return 0, 0
+            return "You can't afford any fuel"
 
         self.ship.fuel += f
         self.ship.cash -= cost
-        return f, cost
+        return "Refuelling {r} LY ({f} tonnes) cost {p:.1f} credits".format(r=f / 10.0, f=f, p=cost)
