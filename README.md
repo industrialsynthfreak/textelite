@@ -1,5 +1,6 @@
 # Pytextelite
 Fork of pytextelite code for python 3.
+
 Originally based on [this code](http://automaticromantic.com/static/misc/pytxtelite.txt) which, in turn, uses Ian Bell's Text Elite [C code](http://www.elitehomepage.org/text/index.htm)
 Classic Elite galaxy (not Elite+) should be pretty similar to which this code generates (at least system names and their descriptions are correct).
 The original text-elite code does not contain any battle or smuggling mechanics, ship upgrades, ratings or missions. I probably will add this parts later.
