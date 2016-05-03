@@ -33,6 +33,13 @@ class Interface:
     def _set_palette(self, palette: str):
         self.palette = self.styles.get(palette)
 
+    def _show_question_box(self, text):
+        question = urwid.Edit(text)
+        self.info_head.widget_list.append(question)
+        urwid.connect_signal(question, 'change', self.process_question)
+        self.screen.focus_position = 1
+        self.info_head.focus_position = 1
+
     def _create_button_list(self, data, function):
         buttons = []
         for status, msg in data:
@@ -66,6 +73,15 @@ class Interface:
         }
         if key in binds:
             return binds[key]()
+
+    def process_question(self, edit=None, text=None):
+        if text.endswith(' '):
+            self.info_head.widget_list.pop(-1)
+            self.screen.focus_position = 0
+            if self.question == 'NAME':
+                self.game.change_name(text[:-1])
+                self.button_show_status()
+            self.question = None
 
     @staticmethod
     def do_terminate():
@@ -180,7 +196,12 @@ class Interface:
                 self.info.widget_list[-1].focus_position = focus
         self._set_head(msg)
 
+    def do_question_change_name(self):
+        self.question = 'NAME'
+        self._show_question_box('Enter your name, commander: ')
+
     def __init__(self):
+        self.question = 'NAME'
         self.game = TradingGame()
         self.selected_system = None
         self.menu = self._create_command_menu()
@@ -188,6 +209,7 @@ class Interface:
         self.info = urwid.Pile([urwid.Text(u'')])
         self.screen = urwid.Pile([self.menu, self.info_head, self.info])
         self.button_show_status()
+        self.do_question_change_name()
         self._set_palette('dark')
         self.fill = urwid.Filler(self.screen, 'top')
         self.fill = urwid.AttrMap(self.fill, 'info')

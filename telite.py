@@ -623,10 +623,11 @@ class TradingGame:
     def info_equip(self):
         head = 'Equip ship %.1f Credits' % self.ship.cash
         desc = [
+            (False, self.ship.ship.name),
             (False, self.ship.ship.desc),
             (False, 'EQUIPMENT            BUY / SELL')
         ]
-        data = ('Fuel', 'Fuel (/Light Year) %s' % (self.ship.fuel * 0.1))
+        data = ('Fuel', 'Fuel (/Light Year) %.1f' % (self.ship.fuel * 0.1))
         desc.append((True, data))
         return True, (head, desc)
 
@@ -706,3 +707,8 @@ class TradingGame:
                     n=name, u=g.commodity.unit.name, b=g.price, s=g.price * (1 - self.localmarket.selling_fee))
             )
         return True, (head, data)
+
+    def change_name(self, new_name):
+        new_name = new_name.strip()
+        if new_name:
+            self.ship.name = new_name

@@ -2,7 +2,7 @@
 Fork of pytextelite code for python 3.
 
 Originally based on [this code](http://automaticromantic.com/static/misc/pytxtelite.txt) which, in turn, uses Ian Bell's Text Elite [C code](http://www.elitehomepage.org/text/index.htm)
-Classic Elite galaxy (not Elite+) should be pretty similar to which this code generates (at least system names and their descriptions are correct).
+Classic Elite galaxy (not Elite+) should be pretty similar to this (at least system names and their properties are correct).
 
 The [ncurses](http://www.gnu.org/software/ncurses/ncurses.html) version is implemented to represent the Classic Elite interface look.
 
