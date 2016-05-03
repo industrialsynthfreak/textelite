@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 from cmd import Cmd
 
 from telite import TradingGame
@@ -39,17 +39,8 @@ class TradingGameCmd(Cmd):
             amt = self._check_value(number)
             if not amt:
                 return False
-            amt = int(amt + 1)
-
-        if not good:
-            print('You must specify trade good')
-            return False
-        for commodity in self.game.localmarket.commodities:
-            if commodity.name.lower().startswith(good):
-                return commodity, amt
-        else:
-            print("Unknown trade good")
-            return False
+            amt = int(amt)
+        return good, amt
 
     def __init__(self, debug=False):
         self.debug = debug
@@ -61,23 +52,21 @@ class TradingGameCmd(Cmd):
         self.prompt = 'Cash : %0.2f>' % self.game.ship.cash
 
     def do_jump(self, planetname):
-        ret = self.game.jump(planetname.strip())
+        status, msg = self.game.jump(planetname.strip())
+        print(msg)
         self.do_info('')
-        return ret
+        return
 
     def do_j(self, planetname):
         return self.do_jump(planetname)
 
     def do_local(self, line):
         print("Galaxy number %d" % self.game.galaxy.galaxy_number)
-        system_list = self.game.galaxy.systems_within(self.game.current_system, self.game.ship.maxfuel)
-        system_list.sort(key=lambda x: x[0])  # Smallest first
-        for distance, planet_sys in system_list:
-            if distance <= self.game.ship.fuel:
-                i = " * "
-            else:
-                i = "-"
-            print("{i:2}{d:<8.1f} {desc}".format(i=i, d=distance / 10., desc=planet_sys.description(short=True)))
+        status, (head, choices) = self.game.info_local_systems()
+        print(head.upper())
+        for __, (name, desc) in choices:
+            print(''.join(desc))
+        return
 
     def do_l(self, line):
         return self.do_local(line)
@@ -85,11 +74,16 @@ class TradingGameCmd(Cmd):
     def do_galhyp(self, line):
         ret = self.game.next_galaxy()
         print("You appear in galaxy %d" % self.game.galaxy.galaxy_number)
-        return ret
+        return
 
     def do_mkt(self, line):
-        self.game.display_market()
-        print("Fuel : {f}   Holdspace : {s}".format(f=self.game.ship.fuel / 10.0, s=self.game.ship.hold_remaining))
+        status, (head, data) = self.game.info_trade()
+        print(head.upper())
+        for g in data:
+            print(g)
+        print("Fuel : {f}   Holdspace : {s}".format(
+            f=self.game.ship.fuel / 10.0, s=self.game.ship.hold_remaining))
+        return
 
     def do_m(self, line):
         return self.do_mkt(line)
@@ -98,9 +92,11 @@ class TradingGameCmd(Cmd):
         v = self._check_good(line)
         if not v:
             return
-        res = self.game.sell(*v)
+        name, amt = v
+        status, msg = self.game.sell(name, amt)
+        print(msg)
         self.set_prompt()
-        return res
+        return
 
     def do_s(self, line):
         return self.do_sell(line)
@@ -109,7 +105,9 @@ class TradingGameCmd(Cmd):
         v = self._check_good(line)
         if not v:
             return
-        self.game.buy(*v)
+        name, amt = v
+        status, msg = self.game.buy(name, amt)
+        print(msg)
         self.set_prompt()
         return
 
@@ -117,28 +115,56 @@ class TradingGameCmd(Cmd):
         return self.do_buy(line)
 
     def do_fuel(self, line):
-        ly = self._check_value(line)
-        if ly:
-            print(self.game.buy_fuel(ly * 10))
-            self.set_prompt()
+        status, msg = self.game.buy_fuel()
+        print(msg)
+        self.set_prompt()
         return
 
     def do_f(self, line):
         return self.do_fuel(line)
 
     def do_info(self, systemname):
-        psystem = self.game.galaxy.closest_system_like(self.game.current_system, systemname)
-        if psystem is None:
-            print("System {name} could not be found.".format(name=systemname))
+        status, msg = self.game.info_selected_system(systemname)
+        if status:
+            (head, info) = msg
+            print(head.upper())
+            print('\n'.join(info))
         else:
-            print(psystem)
+            print(msg)
         return
 
     def do_i(self, name):
         return self.do_info(name)
 
     def do_com(self, line):
-        print(self.game.ship)
+        status, msg = self.game.info_commander()
+        if status:
+            (head, info) = msg
+            print(head.upper())
+            print('\n'.join(info))
+        return
+
+    def do_cargo(self, line):
+        status, msg = self.game.info_cargo()
+        if status:
+            head, info = msg
+            print(head.upper())
+            for __, desc in info:
+                if __:
+                    name, desc = desc
+                print(''.join(desc))
+        return
+
+    def do_c(self, line):
+        return self.do_cargo(line)
+
+    def do_dump(self, line):
+        v = self._check_good(line)
+        if not v:
+            return
+        name, amt = v
+        status, msg = self.game.dump(name, amt)
+        print(msg)
         return
 
     def do_run(self, fname):
@@ -151,6 +177,7 @@ class TradingGameCmd(Cmd):
                 print("Cash > ", self.game.ship.cash)
         else:
             print("Could not open file")
+        return
 
     @staticmethod
     def do_quit(line):
@@ -178,8 +205,10 @@ class TradingGameCmd(Cmd):
             sell  (or s) [tradegood] [amount]  - sell to a local store
             fuel  (or f) [amount]              - buy amount LY of fuel
             jump  (or j) [planetname]          - hyperjump
+            dump [tradegood] [amount]          - dump cargo into space
             local (or l) - list of planets within the ship hyperjump range
             mkt   (or m) - show local market
+            cargo (or c) - show cargo bay
             com          - commander status
             galhyp       - jump to a next galaxy
 

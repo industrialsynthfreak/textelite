@@ -1,4 +1,4 @@
-from collections import namedtuple
+from collections import namedtuple, OrderedDict
 
 
 class Randomizer:
@@ -61,9 +61,11 @@ class NameGenerator:
 
 class PlanSys:
     """A planetary system"""
-    economy_types = ("Rich Ind", "Average Ind", "Poor Ind", "Mainly Ind",
-                     "Mainly Agri", "Rich Agri", "Average Agri", "Poor Agri")
-    gov_types = ("Anarchy", "Feudal", "Multi-gov", "Dictatorship", "Communist",
+    economy_types = ("Rich Industrial", "Industrial Ind",
+                     "Poor Industrial", "Industrial Ind",
+                     "Mainly Agricultural", "Rich Agricultural",
+                     "Average Agricultural", "Poor Agricultural")
+    gov_types = ("Anarchy", "Feudal", "Multi-government", "Dictatorship", "Communist",
                  "Confederacy", "Democracy", "Corporate State")
     goatsoup_template = "\x8F is \x97."
     desc_list = {
@@ -187,11 +189,11 @@ class PlanSys:
                 new_s += data
             return new_s
 
+        self.gs = self.goatsoupseed[:]
         name = _str_check(self.goatsoup_template)
         return name[0].capitalize() + name[1:]
 
     def __str__(self):
-        self.gs = self.goatsoupseed[:]
         desc = '''
         System: {name}
         Position: {x}:{y}
@@ -259,15 +261,13 @@ class Galaxy:
            seed value for galaxy one. If you want a later galaxy you have to
            advance through to get it.
         """
-        self.galaxy_number = None
+        self.galaxy_number = 1
         self.seed = None
         self.systems = None
         self.set_galaxy(1)
 
     def make_systems(self):
         self.systems = [self.make_system(i) for i in range(256)]
-        print(self.galaxy_number)
-        print(sorted([s.name for s in self.systems]))
 
     def set_galaxy(self, num: int):
         """Set base seed for galaxy
@@ -315,6 +315,8 @@ class Galaxy:
         return int(4.0 * ((a.x - b.x) ** 2 + (a.y - b.y) ** 2 / 4.0) ** 0.5)
 
     def closest_system_like(self, current_sys, name):
+        if not name:
+            return 0., current_sys
         d = 9999
         ret_system = None
         for planet_sys in self.systems:
@@ -323,7 +325,7 @@ class Galaxy:
                 if dist < d:
                     d = dist
                     ret_system = planet_sys
-        return ret_system
+        return d, ret_system
 
     def systems_within(self, current, max_ly_distance):
         found = []
@@ -340,7 +342,8 @@ class Market:
     class MarketGood:
         """A commodity for sale : price / quantity"""
 
-        def __init__(self, price=0, q=0):
+        def __init__(self, commodity, price=0, q=0):
+            self.commodity = commodity
             self.price = price
             self.quantity = q
 
@@ -360,24 +363,32 @@ class Market:
             self.name = name
 
     commodities = (
-        Commodity(0x13, -0x02, 0x06, 0x01, Commodity.t, "Food        "),
-        Commodity(0x14, -0x01, 0x0A, 0x03, Commodity.t, "Textiles    "),
+        Commodity(0x13, -0x02, 0x06, 0x01, Commodity.t, "Food"),
+        Commodity(0x14, -0x01, 0x0A, 0x03, Commodity.t, "Textiles"),
         Commodity(0x41, -0x03, 0x02, 0x07, Commodity.t, "Radioactives"),
-        Commodity(0x28, -0x05, 0xE2, 0x1F, Commodity.t, "Slaves      "),
+        Commodity(0x28, -0x05, 0xE2, 0x1F, Commodity.t, "Slaves"),
         Commodity(0x53, -0x05, 0xFB, 0x0F, Commodity.t, "Liquor/Wines"),
-        Commodity(0xC4, +0x08, 0x36, 0x03, Commodity.t, "Luxuries    "),
-        Commodity(0xEB, +0x1D, 0x08, 0x78, Commodity.t, "Narcotics   "),
-        Commodity(0x9A, +0x0E, 0x38, 0x03, Commodity.t, "Computers   "),
-        Commodity(0x75, +0x06, 0x28, 0x07, Commodity.t, "Machinery   "),
-        Commodity(0x4E, +0x01, 0x11, 0x1F, Commodity.t, "Alloys      "),
-        Commodity(0x7C, +0x0d, 0x1D, 0x07, Commodity.t, "Firearms    "),
-        Commodity(0xB0, -0x09, 0xDC, 0x3F, Commodity.t, "Furs        "),
-        Commodity(0x20, -0x01, 0x35, 0x03, Commodity.t, "Minerals    "),
-        Commodity(0x61, -0x01, 0x42, 0x07, Commodity.kg, "Gold        "),
-        Commodity(0xAB, -0x02, 0x37, 0x1F, Commodity.kg, "Platinum    "),
-        Commodity(0x2D, -0x01, 0xFA, 0x0F, Commodity.g, "Gem-Stones  "),
-        Commodity(0x35, +0x0F, 0xC0, 0x07, Commodity.t, "Alien Items "),
+        Commodity(0xC4, +0x08, 0x36, 0x03, Commodity.t, "Luxuries"),
+        Commodity(0xEB, +0x1D, 0x08, 0x78, Commodity.t, "Narcotics"),
+        Commodity(0x9A, +0x0E, 0x38, 0x03, Commodity.t, "Computers"),
+        Commodity(0x75, +0x06, 0x28, 0x07, Commodity.t, "Machinery"),
+        Commodity(0x4E, +0x01, 0x11, 0x1F, Commodity.t, "Alloys"),
+        Commodity(0x7C, +0x0d, 0x1D, 0x07, Commodity.t, "Firearms"),
+        Commodity(0xB0, -0x09, 0xDC, 0x3F, Commodity.t, "Furs"),
+        Commodity(0x20, -0x01, 0x35, 0x03, Commodity.t, "Minerals"),
+        Commodity(0x61, -0x01, 0x42, 0x07, Commodity.kg, "Gold"),
+        Commodity(0xAB, -0x02, 0x37, 0x1F, Commodity.kg, "Platinum"),
+        Commodity(0x2D, -0x01, 0xFA, 0x0F, Commodity.g, "Gem-Stones"),
+        Commodity(0x35, +0x0F, 0xC0, 0x07, Commodity.t, "Alien Items"),
     )
+
+    @classmethod
+    def find_by_name(cls, commod_name: str):
+        for c in cls.commodities:
+            if c.name.lower().startswith(commod_name.lower().strip()):
+                return c
+        else:
+            return None
 
     def create_goods(self, system, fluct):
         for c in self.commodities:
@@ -395,44 +406,37 @@ class Market:
             q &= 0xFF
             good.price = (q * 4) / 10.0
 
-        self.goods['Alien Items '].quantity = 0
+        self.goods['Alien Items'].quantity = 0
 
     def __init__(self, system, fluct):
-        self.goods = {c.name: self.MarketGood() for c in self.commodities}
+        self.goods = OrderedDict([(c.name, self.MarketGood(c)) for c in self.commodities])
         self.create_goods(system, fluct)
+        self.selling_fee = 0.035
 
 
 class Ship:
     """A ship (by default a Cobra MkIII)"""
     ship_descriptions = (
-        '''This ship is most commonly used by traders, although a few have been captured by pirates,
-        so a wise commander will be wary of even the quietest looking ships.
-        The standard Cobra hull is equipped with four missile pods, separate front and rear shields,
-        and provision for a cargo bay extension which increases the capacity of the hold.''',
-        '''Combat-trader craft favored latterly by pirates, the Mark I Cobra was the first trade ship
-        designed and built for the one-man trader. Its special feature at the time of manufacture
-        (by Paynou, Prossett and Salem) was its Prossett Drive, which incorporated afterburners with
-        proton-tightened, interior shaft walls. These are now a standard fitting for both internal
-        and external integuments of all PPS made craft.
+        '''
+        This ship is most commonly used by traders, although a few have been captured
+        by pirates,so a wise commander will be wary of even the quietest looking ships.
+        The standard Cobra hull is equipped with four missile pods, separate front and
+        rear shields, and provision for a cargo bay extension which increases the
+        capacity of the hold.
         ''',
-        '''Manufactured by Outworld Workshops, a rogue breakaway company from Spalder and Prime Inc.
-        which operates without license from an unknown location, the Adder-class craft has dual
-        atmospheric-spatial capability and is often used by smugglers. Pregg's "wingfolding" system
-        permits landing on planetary surfaces. Carries one missile.'''
     )
     Ship = namedtuple('Ship', ['name', 'holdsize', 'maxfuel', 'velocity', 'maneur', 'crew', 'hull', 'desc'])
     ship_types = (
         Ship('Cobra MkIII', 20, 70, 0.3, 8, 1, 18, ship_descriptions[0]),
-        Ship('Cobra MkI', 10, 70, 0.26, 3, 1, 18, ship_descriptions[1]),
-        Ship('Adder', 2, 70, 0.24, 4, 2, 28, ship_descriptions[2])
     )
 
     def __init__(self, ship_type='Cobra MkIII'):
+        self.name = 'Jameson'
         self.ship = next((s for s in self.ship_types if s.name == ship_type), self.ship_types[0])
         self.holdsize = self.ship.holdsize
         self.maxfuel = self.ship.maxfuel
         self.fuel = self.maxfuel
-        self.cargo = {c.name: 0 for c in Market.commodities}
+        self.cargo = OrderedDict([(c.name, 0) for c in Market.commodities])
         self.cash = 100.0
         self.galaxynum = 1
         self.planetnum = 7  # Lave
@@ -469,133 +473,236 @@ class TradingGame:
         self.localmarket = None
         self.generate_market()  # Since we want seed=0 for Lave
 
-    def generate_market(self, fluct=0):
-        self.localmarket = Market(self.current_system, fluct)
-
-    @staticmethod
-    def char(value):
-        value &= 255
-        if value > 127:
-            return value - 256
-        return value
-
     @property
     def current_system(self):
         """Get the players current system"""
         return self.galaxy.systems[self.ship.planetnum]
 
-    def move_to(self, planet_sys):
-        self.ship.planetnum = planet_sys.num
-
-    def jump(self, planetname):
-        dest = self.galaxy.closest_system_like(self.current_system, planetname)
-
-        if dest is None:
-            print("Planet not found")
-            return
-
-        if dest.name == self.current_system.name:
-            print("Bad jump!")
-            return
-
-        distance = self.galaxy.distance(self.current_system, dest)
-        if distance > self.ship.fuel:
-            print("Jump too far")
-            return
-
-        self.ship.fuel -= distance
-        self.move_to(dest)
-
-        r = Randomizer.get_value()
-        fluct = self.char(r & 0xFF)
-        self.generate_market(fluct)
+    def generate_market(self, fluct=0):
+        self.localmarket = Market(self.current_system, fluct)
 
     def next_galaxy(self):
         """Galactic hyperspace to next galaxy"""
         self.galaxy.set_galaxy(self.galaxy.galaxy_number + 1)
         self.generate_market()
 
-    def display_market(self):
-        """Print out commodities, prices and quantities here"""
-        for c in Market.commodities:
-            lcl = self.localmarket.goods[c.name]
-            current = self.ship.cargo[c.name]
-            print('{name:15} {price:5.1f} {q:3d}{unit:<3} Hold: {current}'.format(name=c.name, price=lcl.price,
-                                                                                  q=lcl.quantity, unit=c.unit.name,
-                                                                                  current=current))
+    def move_to(self, planet_sys):
+        self.ship.planetnum = planet_sys.num
+
+    def jump(self, planetname):
+
+        def _char(value):
+            value &= 255
+            if value > 127:
+                return value - 256
+            return value
+
+        distance, dest = self.galaxy.closest_system_like(self.current_system, planetname)
+        if dest is None:
+            return False, "NAV ERROR: Planet not found!"
+        if dest.name == self.current_system.name:
+            return False, "NAV ERROR: Jump not possible!"
+        if distance > self.ship.fuel:
+            return False, "NAV ERROR: Not enough fuel for the jump!"
+        self.ship.fuel -= distance
+        self.move_to(dest)
+        r = Randomizer.get_value()
+        self.generate_market(_char(r & 0xFF))
+        return True, "REPORT: Welcome to %s" % dest.name
+
+    def dump(self, commod, amt):
+        commod = self.localmarket.find_by_name(commod)
+        cargo = self.ship.cargo.get(commod.name)
+        if not cargo:
+            msg = "ENG ERROR: No %s available to dump into space" % commod.name
+            return False, msg
+        if amt > cargo:
+            amt = cargo
+        self.ship.cargo[commod.name] -= amt
+        msg = "REPORT: %.0f %s of %s successfully removed from the ship" % (
+            amt, commod.unit.name, commod.name)
+        return True, msg
 
     def sell(self, commod, amt):
+        commod = self.localmarket.find_by_name(commod)
         cargo = self.ship.cargo[commod.name]
         if cargo <= 0:
-            print("No {name} to sell.".format(name=commod.name))
-            return
-
+            msg = "FIN ERROR: No %s to sell." % commod.name
+            return False, msg
         if amt > cargo:
-            print("Only have {q}{u} to sell. Selling {q}{u}".format(q=cargo, u=commod.unit.name))
+            # msg = "Only have {q}{u} to sell. Selling {q}{u}".format(q=cargo, u=commod.unit.name)
             amt = cargo
-
         local_market = self.localmarket.goods[commod.name]
-        price = amt * local_market.price
-        print("Selling {q}{u} of {name} for {p}".format(q=amt, u=commod.unit.name, name=commod.name, p=price))
-        self.ship.cash = self.ship.cash + price
+        price = amt * local_market.price * (1. - self.localmarket.selling_fee)
+        msg = "REPORT: Selling {q}{u} of {name} for {p:.1f}".format(
+            q=amt, u=commod.unit.name, name=commod.name, p=price)
+        self.ship.cash += price
         self.ship.cargo[commod.name] -= int(amt)
         local_market.quantity += int(amt)
+        return True, msg
 
     def buy(self, commod, amt):
+        commod = self.localmarket.find_by_name(commod)
         local_market = self.localmarket.goods[commod.name]
         lcl_amount = local_market.quantity
         if lcl_amount == 0:
-            print("Could not buy any {name}".format(name=commod.name))
-            return
-
+            msg = "FIN ERROR: no %s on the market" % commod.name
+            return False, msg
         if amt > lcl_amount:
-            print("Could not buy {q}{u} attempting to buy maximum {q2}{u} instead.".format(
-                q=amt, u=commod.unit.name, q2=lcl_amount))
+            # msg = "FIN ERROR: Could not buy {q}{u} attempting to buy maximum {q2}{u} instead.".format(
+            # q=amt, u=commod.unit.name, q2=lcl_amount)
             amt = lcl_amount
-
         if local_market.price <= 0:
             can_have = amt
         else:
             can_have = int(self.ship.cash / local_market.price)
         if can_have <= 0:
-            print("Cannot afford any {name}".format(name=commod.name))
-            return
-
+            msg = "FIN ERROR: Cannot afford any %s" % commod.name
+            return False, msg
         if amt > can_have:
             amt = can_have
-
         if self.ship.hold_remaining < amt * commod.unit.mod:
             can_have = self.ship.hold_remaining
             if can_have <= 0:
-                print("No room in hold for any {name}".format(name=commod.name))
-                return
+                msg = "ENG ERROR: No room in hold for any %s" % commod.name
+                return False, msg
             else:
-                print("Could not fit {q}{u} into the hold. Reducing to {available}{u}".format(
-                    q=amt, u=commod.unit.name, available=can_have))
+                # msg = "ENG ERROR: Could not fit {q}{u} into the hold. Reducing to {available}{u}".format(
+                # q=amt, u=commod.unit.name, available=can_have)
                 amt = can_have
-
         price = amt * local_market.price
-        print("Buying {q}{u} of {name} for {p:.1f}".format(q=amt, u=commod.unit.name, name=commod.name, p=price))
+        msg = "REPORT: Buying {q}{u} of {name} for {p:.1f}".format(
+            q=amt, u=commod.unit.name, name=commod.name, p=price)
         self.ship.cash -= price
         self.ship.cargo[commod.name] += int(amt)
         local_market.quantity -= int(amt)
+        return True, msg
 
-    def buy_fuel(self, f):
-        if f + self.ship.fuel > self.ship.maxfuel:
-            f = self.ship.maxfuel - self.ship.fuel
-
-        if f <= 0:
-            return "Your fuel tank is full ({f} tonnes / {r} LY Range)".format(f=self.ship.fuel,
-                                                                               r=self.ship.fuel / 10.0)
-        cost = self.current_system.fuelcost * f
-
-        if self.ship.cash > 0:
-            if cost > self.ship.cash:
-                f = self.ship.cash / self.current_system.fuelcost
-                cost = self.current_system.fuelcost * f
-        else:
-            return "You can't afford any fuel"
-
-        self.ship.fuel += f
+    def buy_fuel(self):
+        fuel_to_buy = self.ship.maxfuel - self.ship.fuel
+        if fuel_to_buy <= 0:
+            msg = "ENG ERROR: Fuel tank is full ( %.0f tonnes / %.1f LY Range)" % (self.ship.fuel, self.ship.fuel * 0.1)
+            return False, msg
+        cost = self.current_system.fuelcost * fuel_to_buy
+        if self.ship.cash <= 0:
+            self.ship.cash = 0.
+            return False, "FIN ERROR: You can't afford any fuel"
+        if cost > self.ship.cash:
+            fuel_to_buy = self.ship.cash / self.current_system.fuelcost
+            cost = self.current_system.fuelcost * fuel_to_buy
+        self.ship.fuel += fuel_to_buy
         self.ship.cash -= cost
-        return "Refuelling {r} LY ({f} tonnes) cost {p:.1f} credits".format(r=f / 10.0, f=f, p=cost)
+        msg = "REPORT: Refuelling %.1f LY (%.0f tonnes) cost %.1f credits" % (
+            fuel_to_buy * 0.1, fuel_to_buy, cost)
+        return True, msg
+
+    def info_local_systems(self):
+        head = 'short range chart'
+        system_list = self.galaxy.systems_within(self.current_system, self.ship.maxfuel)
+        choices = []
+        for d, s in system_list:
+            if d <= self.ship.fuel:
+                i = " * "
+            else:
+                i = "-"
+            desc = (s.name, '{i:2}{d:<8.1f} {desc}'.format(i=i, d=d / 10., desc=s.description(short=True)))
+            choices.append((True, desc))
+        return True, (head, choices)
+
+    def info_commander(self):
+        head = 'Commander %s' % self.ship.name
+        desc = ('System:       %s' % self.current_system.name,
+                'Fuel:         %.1f Light Years' % (self.ship.fuel * 0.1),
+                'Cash:         %.1f Credits' % self.ship.cash,
+                'Legal Status: Clean',
+                'Rating:       Harmless',
+                'Ship:         %s' % self.ship.ship.name,
+                'EQUIPMENT:',)
+        return True, (head, desc)
+
+    def info_equip(self):
+        head = 'Equip ship %.1f Credits' % self.ship.cash
+        desc = [
+            (False, self.ship.ship.desc),
+            (False, 'EQUIPMENT            BUY / SELL')
+        ]
+        data = ('Fuel', 'Fuel (/Light Year) %s' % (self.ship.fuel * 0.1))
+        desc.append((True, data))
+        return True, (head, desc)
+
+    def info_selected_system(self, name=None):
+        d, system = self.galaxy.closest_system_like(self.current_system, name)
+        if not system:
+            return False, 'NAV ERROR', ('System not found!!!',)
+        head = 'Data on %s' % system.name
+        desc = ('Distance:      %.1f Light Years' % (d * 0.1),
+                'Economy:       %s' % system.economy_description,
+                'Government:    %s' % system.government_description,
+                'Tech. Level:   %d' % system.techlev,
+                'Population:    %.1f Billion' % (system.population * 0.1),
+                'Productivity:  %d M CR' % system.productivity,
+                'Radius (Av):   %d km' % system.radius,
+                '%s' % system.goatsoup,)
+        return True, (head, desc)
+
+    def info_galaxy(self):
+        head = 'galactic chart %d' % self.galaxy.galaxy_number
+        galaxy = [[' '] * 137 for _ in range(32)]
+        player_pos, star, reachable = '>', '.', '*'
+        list_of_nearest = [s for d, s in self.galaxy.systems_within(self.current_system, self.ship.maxfuel)]
+        for s in self.galaxy.systems:
+            if s in list_of_nearest:
+                x0, y0 = s.x // 2, s.y // 8
+                dx = len(s.name)
+                galaxy[y0][x0 + 1:x0 + dx] = list(s.name)
+                galaxy[y0][x0] = reachable
+            else:
+                galaxy[s.y // 8][s.x // 2] = star
+        x0, y0 = self.current_system.x // 2, self.current_system.y // 8
+        galaxy[y0][x0] = player_pos
+        galaxy = [''.join(row) for row in galaxy]
+        return True, (head, galaxy)
+
+    def info_cargo(self):
+        head = 'items %d / %d tonnes' % (self.ship.holdsize - self.ship.hold_remaining, self.ship.holdsize)
+        choices = [
+            (False, 'Fuel: %.1f Light Years' % (self.ship.fuel * 0.1)),
+            (False, 'Cash: %.1f Credits' % self.ship.cash),
+        ]
+        if self.ship.hold_remaining < self.ship.holdsize:
+            choices.append((False, 'CARGO      DUMP'))
+        for c, am in self.ship.cargo.items():
+            if am:
+                choices.append(
+                    (True, (c, "%s %d" % (c, am)))
+                )
+        return True, (head, choices)
+
+    def info_buy(self):
+        head = 'buy cargo%5.1f Credits' % self.ship.cash
+        data = [(False, 'PRODUCT         UNIT  PRICE / QTY')]
+        for name, g in self.localmarket.goods.items():
+            item = (name, '{n:16s} {u:3s} {b:5.1f} {q:5d}'.format(
+                n=name, u=g.commodity.unit.name, b=g.price, q=g.quantity))
+            data.append((True, item))
+        return True, (head, data)
+
+    def info_sell(self):
+        head = 'sell cargo%5.1f Credits' % self.ship.cash
+        data = [(False, 'PRODUCT         UNIT  PRICE / QTY')]
+        for name, g in self.localmarket.goods.items():
+            item = (name, '{n:16s} {u:3s} {b:5.1f} {q:5d}'.format(
+                n=name, u=g.commodity.unit.name, b=g.price * (1 - self.localmarket.selling_fee),
+                q=self.ship.cargo[name]))
+            data.append((True, item))
+        return True, (head, data)
+
+    def info_trade(self):
+        head = '%s market prices' % self.current_system.name
+        data = ['PRODUCT         UNIT  BUY / SELL']
+        for name, g in self.localmarket.goods.items():
+            data.append(
+                '{n:16s} {u:3s} {b:5.1f} {s:5.1f}'.format(
+                    n=name, u=g.commodity.unit.name, b=g.price, s=g.price * (1 - self.localmarket.selling_fee))
+            )
+        return True, (head, data)
