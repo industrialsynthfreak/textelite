@@ -15,7 +15,7 @@ All cheats removed. Hey, you already have the source codes! Make cheats by yours
 - ncurses version: [urwid](http://urwid.org/index.html), but it's already included. I'm not related with urwid lib in any way
 - ncurses version: Linux, OSX, Cygwin or other unix-like console
 
-# Use of console ncurses version (preferred way)
+# The ncurses version (preferred)
 Run the main app.
 ```python
 python3 app_cursed.py
@@ -28,7 +28,7 @@ It's recommended to set quite a big console window for this mode (otherwise the 
 - space - press a button
 - esc - quit
 
-# Text version
+# The original version
 First, run the main app.
 ```python
 python3 app.py
