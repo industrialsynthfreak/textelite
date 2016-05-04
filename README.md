@@ -29,9 +29,9 @@ It's recommended to set quite a big console window for this mode (otherwise the 
 - esc - quit
 
 ## Screenshots
-![Screen1](https://github.com/industrialsynthfreak/textelite/tree/master/screenshots/screen1 "Galaxy")
-![Screen2](https://github.com/industrialsynthfreak/textelite/tree/master/screenshots/screen2 "Local sector")
-![Screen3](https://github.com/industrialsynthfreak/textelite/tree/master/screenshots/screen3 "Upgrades")
+![Screen1](https://raw.githubusercontent.com/industrialsynthfreak/textelite/master/screenshots/screen1.png "Galaxy")
+![Screen2](https://raw.githubusercontent.com/industrialsynthfreak/textelite/master/screenshots/screen2.png "Local sector")
+![Screen3](https://raw.githubusercontent.com/industrialsynthfreak/textelite/master/screenshots/screen3.png "Upgrades")
 
 # The original version
 First, run the main app.
