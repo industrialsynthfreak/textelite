@@ -7,9 +7,9 @@ from telite import TradingGame
 class Interface:
     styles = {
         'dark': [('info', 'dark green', 'black'),
-                 ('button', 'light cyan', 'dark blue')],
+                 ('button', 'light cyan, bold', 'dark blue')],
         'light': [('info', 'black', 'light gray'),
-                  ('button', 'light red', 'light gray')]
+                  ('button', 'light red, bold', 'light gray')]
     }
     palette = None
 

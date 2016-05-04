@@ -28,6 +28,11 @@ It's recommended to set quite a big console window for this mode (otherwise the 
 - space - press a button
 - esc - quit
 
+## Screenshots
+![Screen1](https://github.com/industrialsynthfreak/textelite/tree/master/screenshots/screen1 "Galaxy")
+![Screen2](https://github.com/industrialsynthfreak/textelite/tree/master/screenshots/screen2 "Local sector")
+![Screen3](https://github.com/industrialsynthfreak/textelite/tree/master/screenshots/screen3 "Upgrades")
+
 # The original version
 First, run the main app.
 ```python
