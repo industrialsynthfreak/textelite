@@ -1,41 +1,70 @@
 from collections import namedtuple, OrderedDict
 
 
-class Randomizer:
+class ClassOnly:
+    @staticmethod
+    def __new__(cls, *args, **kws):
+        raise NotImplementedError("instance construction not allowed")
+
+
+class RandomizerMeta(type):
+    @property
+    def algorithm(cls):
+        return cls._algorithm
+
+    @algorithm.setter
+    def algorithm(cls, value: str):
+        value = value.lower()
+        if value not in cls.algorithm_types:
+            raise ValueError(
+                "Non-specified type, should be any of: %s" % cls.algorithm_types)
+        cls._algorithm = value
+
+
+class Randomizer(ClassOnly, metaclass=RandomizerMeta):
     """
     Randomizer class combines both sas and lcc algorithms from the original code.
-    The type of used algorithm should be specified in class .algorithm attribute.
+    A type of a used algorithm should be specified in class .algorithm attribute.
     Should be used as class only.
     """
     next = 12345
     lr = 12345 - 1
-    algorithm = 'sas'
+    _algorithm = 'lcc'
+    algorithm_types = {'sas', 'lcc'}
 
     @classmethod
-    def lcc(cls):
+    def get_value(cls):
+        """
+        Returns a specific pseudo-random value
+        :return int: pseudo-random
+        """
+        if cls.algorithm == 'lcc':
+            return cls._lcc()
+        elif cls.algorithm == 'sas':
+            return cls._sas()
+
+    @classmethod
+    def _lcc(cls):
+        """
+        :return: int pseudo-random
+        """
         cls.next = (214013 * cls.next + 2531011)
         return (cls.next >> 16) & 0x7fff
 
     @classmethod
-    def sas(cls):
+    def _sas(cls):
+        """
+        :return int: pseudo-random
+        """
         r = (((((((((((cls.lr << 3) - cls.lr) << 3) + cls.lr) << 1) + cls.lr) << 4) - cls.lr) << 1) - cls.lr) + 0xe60)
         r &= 0x7fffffff
         cls.lr -= 1
         return r
 
-    @classmethod
-    def get_value(cls):
-        """Returns a specific pseudo-random value"""
-        if cls.algorithm == 'lcc':
-            return cls.lcc()
-        elif cls.algorithm == 'sas':
-            return cls.sas()
-        else:
-            return 1
 
-
-class NameGenerator:
+class NameGenerator(ClassOnly):
     """
+    Provides pseudo-random name strings for the Universe
     Should be used as class only.
     """
     pairs0 = "ABOUSEITILETSTONLONUTHNO"
@@ -44,9 +73,11 @@ class NameGenerator:
 
     @classmethod
     def get_name(cls, sample, special_set=False):
-        """Returns a name string from a sample of random integers
-        :param iterable sample: sample of random integers
-        :param bool special_set: defines whether .pairs1 should be used (for non-planet names)
+        """Returns a name string from a sample of random integers.
+        :param iterable sample: list of integers
+        :param bool special_set: set True for extended set of chars
+            (for the Classic Elite planet names should be False)
+        :return str: pseudo-random name
         """
         name = ''
         if special_set:
@@ -60,7 +91,9 @@ class NameGenerator:
 
 
 class PlanSys:
-    """A planetary system"""
+    """
+    A planetary system class.
+    """
     economy_types = ("Rich Industrial", "Industrial Ind",
                      "Poor Industrial", "Industrial Ind",
                      "Mainly Agricultural", "Rich Agricultural",
@@ -110,6 +143,19 @@ class PlanSys:
 
     def __init__(self, num, x, y, name, economy, govtype,
                  techlev, population, productivity, radius, goatseed):
+        """
+        :param int num: planet unique id
+        :param int x:
+        :param int y:
+        :param str name:
+        :param int economy: economy level 0-7
+        :param int govtype: government type 0-7
+        :param int techlev:
+        :param int population:
+        :param int productivity:
+        :param int radius: in km
+        :param list goatseed:
+        """
         self.num = num
         self.x = x
         self.y = y
@@ -124,41 +170,64 @@ class PlanSys:
         self.gs = None
         self.fuelcost = 0.2
 
+    def __str__(self):
+        return '%s at %d, %d' % (self.name, self.x, self.y)
+
     def name_starts_with(self, name):
+        """
+        :param str name:
+        :return bool:
+        """
         return self.name.lower().startswith(name.strip().lower())
 
     @property
+    def techlev_description(self):
+        """
+        :return int:
+        """
+        return self.techlev + 1
+
+    @property
     def economy_description(self):
+        """
+        :return str:
+        """
         return self.economy_types[self.economy]
 
     @property
     def government_description(self):
-        return self.gov_types[self.govtype]
-
-    def gen_rnd_number(self):
-        """Generate a random number for goat-soup.
-           Uses own algorithm so results are consistent and
-           platform independant.
         """
-        x = (self.gs[0] * 2) & 0xFF
-        a = x + self.gs[2]
-        if self.gs[0] > 127:
-            a += 1
-        self.gs[0] = a & 0xFF
-        self.gs[2] = x
-        a //= 256
-        x = self.gs[1]
-        a = (a + x + self.gs[3]) & 0xFF
-        self.gs[1] = a
-        self.gs[3] = x
-        return a
+        :return str:
+        """
+        return self.gov_types[self.govtype]
 
     @property
     def goatsoup(self):
         """
         Planet description property.
-        :return: str description
+        Based on the famous goatsoup algorithm.
+        :return str: description
         """
+
+        def _gen_rnd_number():
+            """
+            Generate a random number for goat-soup.
+            Uses own algorithm so results are consistent and
+            platform independant.
+            :return int: pseudo-random value
+            """
+            x = (self.gs[0] * 2) & 0xFF
+            a = x + self.gs[2]
+            if self.gs[0] > 127:
+                a += 1
+            self.gs[0] = a & 0xFF
+            self.gs[2] = x
+            a //= 256
+            x = self.gs[1]
+            a = (a + x + self.gs[3]) & 0xFF
+            self.gs[1] = a
+            self.gs[3] = x
+            return a
 
         def _char_check(s):
             if s == '\xB0':
@@ -170,11 +239,11 @@ class PlanSys:
                     ns = self.name
                 return ns.capitalize() + 'ian'
             elif s == '\xB2':
-                l = self.gen_rnd_number() & 3
-                sample = (self.gen_rnd_number() for _ in range(l))
+                l = _gen_rnd_number() & 3
+                sample = (_gen_rnd_number() for _ in range(l))
                 return NameGenerator.get_name(sample, special_set=True).capitalize()
             elif s in self.desc_list:
-                return self.desc_list[s][self.gen_rnd_number() % 5]
+                return self.desc_list[s][_gen_rnd_number() % 5]
             else:
                 return False
 
@@ -193,31 +262,16 @@ class PlanSys:
         name = _str_check(self.goatsoup_template)
         return name[0].capitalize() + name[1:]
 
-    def __str__(self):
-        desc = '''
-        System: {name}
-        Position: {x}:{y}
-        Economy: {eco_desc}
-        Government: {gov_desc}
-        Tech Level: {tech}
-        Turnover: {prod} MCR
-        Diameter: {r}km
-        Population: {pop:.1f} Billion
-        "{goat}" (c) The Hitchhiker's Guide
-        '''.format(name=self.name, x=self.x, y=self.y, eco_desc=self.economy_description,
-                   gov_desc=self.government_description, tech=self.techlev + 1, prod=self.productivity,
-                   r=2 * round(self.radius, -2), pop=self.population / 10, goat=self.goatsoup)
-        return desc
-
-    def description(self, short=True):
-        if not short:
-            return self.__str__()
-        return '{name} {tech} {eco_desc} {gov_desc}'.format(name=self.name, tech=self.techlev + 1,
-                                                            eco_desc=self.economy_description,
-                                                            gov_desc=self.government_description)
-
 
 class Galaxy:
+    """
+    A galaxy.
+    In the original game all system data was generated from the initial
+    seed value for galaxy one. If you want a later galaxy you have to
+    advance through to get it.
+    """
+    galaxy_size = 256
+
     class Seed:
         """A pseudo-random number holder based on 16 bit numbers."""
 
@@ -255,39 +309,76 @@ class Galaxy:
             self.w2 = temp
 
     def __init__(self):
-        """A galaxy.
-
-           In the original game all system data was generated from the initial
-           seed value for galaxy one. If you want a later galaxy you have to
-           advance through to get it.
-        """
         self.galaxy_number = 1
         self.seed = None
         self.systems = None
         self.set_galaxy(1)
 
-    def make_systems(self):
-        self.systems = [self.make_system(i) for i in range(256)]
+    def __str__(self):
+        return "Galaxy %d" % self.galaxy_number
 
-    def set_galaxy(self, num: int):
-        """Set base seed for galaxy
-        :param int num: galaxy number
+    @staticmethod
+    def distance(a, b):
+        """
+        :param PlanSys a:
+        :param PlanSys b:
+        :return int: distance between a and b
+        """
+        return int(4.0 * ((a.x - b.x) ** 2 + (a.y - b.y) ** 2 / 4.0) ** 0.5)
+
+    def set_galaxy(self, num):
+        """
+        Creates an unique galaxy
+        :param int num: galaxy number, 0-8
         """
         self.seed = self.Seed()
         for __ in range(2, num + 1):
             self.seed.twist_all()
         self.galaxy_number = num % 8
-        self.make_systems()
+        self.systems = tuple(self._make_system(i) for i in range(self.galaxy_size))
 
-    def make_system(self, system_number):
+    def closest_system_like(self, current_sys, name):
+        """
+        Finds a system with a specific name, being nearest to a choosen system.
+        :param PlanSys current_sys: selected system
+        :param str name: full or partial name
+        :return PlanSys: system found (or None)
+        """
+        if not name:
+            return current_sys
+        d = 9999
+        ret_system = None
+        for planet_sys in self.systems:
+            if planet_sys.name_starts_with(name):
+                dist = self.distance(current_sys, planet_sys)
+                if dist < d:
+                    d = dist
+                    ret_system = planet_sys
+        return ret_system
+
+    def systems_within(self, current, max_ly_distance):
+        """
+        Returns a list of systems within range from a selected system.
+        :param PlanSys current: selected system
+        :param float max_ly_distance: range in ly
+        :return list: found systems
+        """
+        found = []
+        for planet_sys in self.systems:
+            dist = self.distance(current, planet_sys)
+            if dist <= max_ly_distance:
+                found.append((dist, planet_sys))
+        return found
+
+    def _make_system(self, system_number):
         """
         Creates a system with a specific number.
         System data seems ok for a classic Elite, but doesn't match Elite+
         (for example: Orerve/Orrere, different tech levels, pop and productivity).
-        I also tweaked a goatsoup string generation a bit, so planet descriptions
-        probably won't match original ones (but the game don't use them anyway).
+        I tweaked a goatsoup string generation a bit, so planet descriptions
+        probably won't match original ones (but the game do not use them anyway).
         :param int system_number:
-        :return: PlanSys instance
+        :return PlanSys: planet system object
         """
         s = self.seed
         x, y = s.w1 >> 8, s.w0 >> 8
@@ -310,31 +401,6 @@ class Galaxy:
         return PlanSys(system_number, x, y, name, economy, govtype,
                        techlev, population, productivity, radius, goatseed)
 
-    @staticmethod
-    def distance(a, b):
-        return int(4.0 * ((a.x - b.x) ** 2 + (a.y - b.y) ** 2 / 4.0) ** 0.5)
-
-    def closest_system_like(self, current_sys, name):
-        if not name:
-            return 0., current_sys
-        d = 9999
-        ret_system = None
-        for planet_sys in self.systems:
-            if planet_sys.name_starts_with(name):
-                dist = self.distance(current_sys, planet_sys)
-                if dist < d:
-                    d = dist
-                    ret_system = planet_sys
-        return d, ret_system
-
-    def systems_within(self, current, max_ly_distance):
-        found = []
-        for planet_sys in self.systems:
-            dist = self.distance(current, planet_sys)
-            if dist <= max_ly_distance:
-                found.append((dist, planet_sys))
-        return found
-
 
 class Market:
     """Local market model"""
@@ -354,68 +420,97 @@ class Market:
         kg = Unit('kg', 0.)
         g = Unit('g', 0.)
 
-        def __init__(self, base_price, gradient, base_quantity, mask, unit, name):
+        def __init__(self, base_price, gradient, base_quantity, mask, unit, is_legal, name):
+            """
+            :param int base_price:
+            :param int gradient:
+            :param int base_quantity:
+            :param int mask:
+            :param Unit unit: .t, .kg or .g
+            :param bool is_legal: illegal goods are: Narcotics, Firearms, Slaves
+            :param str name:
+            """
             self.base_price = base_price
             self.gradient = gradient
             self.base_quantity = base_quantity
             self.mask = mask
             self.unit = unit
             self.name = name
+            self.is_legal = is_legal
 
     commodities = (
-        Commodity(0x13, -0x02, 0x06, 0x01, Commodity.t, "Food"),
-        Commodity(0x14, -0x01, 0x0A, 0x03, Commodity.t, "Textiles"),
-        Commodity(0x41, -0x03, 0x02, 0x07, Commodity.t, "Radioactives"),
-        Commodity(0x28, -0x05, 0xE2, 0x1F, Commodity.t, "Slaves"),
-        Commodity(0x53, -0x05, 0xFB, 0x0F, Commodity.t, "Liquor/Wines"),
-        Commodity(0xC4, +0x08, 0x36, 0x03, Commodity.t, "Luxuries"),
-        Commodity(0xEB, +0x1D, 0x08, 0x78, Commodity.t, "Narcotics"),
-        Commodity(0x9A, +0x0E, 0x38, 0x03, Commodity.t, "Computers"),
-        Commodity(0x75, +0x06, 0x28, 0x07, Commodity.t, "Machinery"),
-        Commodity(0x4E, +0x01, 0x11, 0x1F, Commodity.t, "Alloys"),
-        Commodity(0x7C, +0x0d, 0x1D, 0x07, Commodity.t, "Firearms"),
-        Commodity(0xB0, -0x09, 0xDC, 0x3F, Commodity.t, "Furs"),
-        Commodity(0x20, -0x01, 0x35, 0x03, Commodity.t, "Minerals"),
-        Commodity(0x61, -0x01, 0x42, 0x07, Commodity.kg, "Gold"),
-        Commodity(0xAB, -0x02, 0x37, 0x1F, Commodity.kg, "Platinum"),
-        Commodity(0x2D, -0x01, 0xFA, 0x0F, Commodity.g, "Gem-Stones"),
-        Commodity(0x35, +0x0F, 0xC0, 0x07, Commodity.t, "Alien Items"),
+        Commodity(0x13, -0x02, 0x06, 0x01, Commodity.t, True, "Food"),
+        Commodity(0x14, -0x01, 0x0A, 0x03, Commodity.t, True, "Textiles"),
+        Commodity(0x41, -0x03, 0x02, 0x07, Commodity.t, True, "Radioactives"),
+        Commodity(0x28, -0x05, 0xE2, 0x1F, Commodity.t, False, "Slaves"),
+        Commodity(0x53, -0x05, 0xFB, 0x0F, Commodity.t, True, "Liquor/Wines"),
+        Commodity(0xC4, +0x08, 0x36, 0x03, Commodity.t, True, "Luxuries"),
+        Commodity(0xEB, +0x1D, 0x08, 0x78, Commodity.t, False, "Narcotics"),
+        Commodity(0x9A, +0x0E, 0x38, 0x03, Commodity.t, True, "Computers"),
+        Commodity(0x75, +0x06, 0x28, 0x07, Commodity.t, True, "Machinery"),
+        Commodity(0x4E, +0x01, 0x11, 0x1F, Commodity.t, True, "Alloys"),
+        Commodity(0x7C, +0x0d, 0x1D, 0x07, Commodity.t, False, "Firearms"),
+        Commodity(0xB0, -0x09, 0xDC, 0x3F, Commodity.t, True, "Furs"),
+        Commodity(0x20, -0x01, 0x35, 0x03, Commodity.t, True, "Minerals"),
+        Commodity(0x61, -0x01, 0x42, 0x07, Commodity.kg, True, "Gold"),
+        Commodity(0xAB, -0x02, 0x37, 0x1F, Commodity.kg, True, "Platinum"),
+        Commodity(0x2D, -0x01, 0xFA, 0x0F, Commodity.g, True, "Gem-Stones"),
+        Commodity(0x35, +0x0F, 0xC0, 0x07, Commodity.t, True, "Alien Items"),
     )
 
+    def __init__(self, system, fluct):
+        """
+        :param PlanSys system: planet system where market will be initialized
+        :param int fluct: market fluctuation value
+        """
+
+        def _create_goods():
+            goods = OrderedDict([(c.name, self.MarketGood(c)) for c in self.commodities])
+
+            for c in self.commodities:
+                good = goods[c.name]
+                product = system.economy * c.gradient
+                changing = fluct & c.mask
+                q = c.base_quantity + changing - product
+                q &= 0xFF
+
+                if q & 0x80:
+                    q = 0
+                good.quantity = q & 0x3F
+
+                q = c.base_price + changing + product
+                q &= 0xFF
+                good.price = (q * 4) / 10.0
+
+            goods['Alien Items'].quantity = 0
+            return goods
+
+        self.goods = _create_goods()
+        self.selling_fee = 0.035
+
     @classmethod
-    def find_by_name(cls, commod_name: str):
+    def find_by_name(cls, commod_name):
+        """
+        Returns a Commodity instance by given full or partial name string.
+        :param str commod_name:
+        :return Commodity:
+        """
         for c in cls.commodities:
             if c.name.lower().startswith(commod_name.lower().strip()):
                 return c
         else:
             return None
 
-    def create_goods(self, system, fluct):
-        for c in self.commodities:
-            good = self.goods[c.name]
-            product = system.economy * c.gradient
-            changing = fluct & c.mask
-            q = c.base_quantity + changing - product
-            q &= 0xFF
-
-            if q & 0x80:
-                q = 0
-            good.quantity = q & 0x3F
-
-            q = c.base_price + changing + product
-            q &= 0xFF
-            good.price = (q * 4) / 10.0
-
-        self.goods['Alien Items'].quantity = 0
-
-    def __init__(self, system, fluct):
-        self.goods = OrderedDict([(c.name, self.MarketGood(c)) for c in self.commodities])
-        self.create_goods(system, fluct)
-        self.selling_fee = 0.035
+    def selling_price(self, buying_price):
+        """
+        :param float buying_price:
+        :return float: selling price
+        """
+        return (1. - self.selling_fee) * buying_price
 
 
 class Ship:
-    """A ship (by default a Cobra MkIII)"""
+    """Player data"""
     ship_descriptions = (
         '''
         This ship is most commonly used by traders, although a few have been captured
@@ -425,14 +520,17 @@ class Ship:
         capacity of the hold.
         ''',
     )
-    Ship = namedtuple('Ship', ['name', 'holdsize', 'maxfuel', 'velocity', 'maneur', 'crew', 'hull', 'desc'])
+    Ship = namedtuple('Ship', ['name', 'holdsize', 'maxfuel', 'desc'])
     ship_types = (
-        Ship('Cobra MkIII', 20, 70, 0.3, 8, 1, 18, ship_descriptions[0]),
+        Ship('Cobra MkIII', 20, 70, ship_descriptions[0]),
     )
+    criminal_records = ('Clean', 'Offender', 'Fugitive')
 
-    def __init__(self, ship_type='Cobra MkIII'):
+    def __init__(self):
         self.name = 'Jameson'
-        self.ship = next((s for s in self.ship_types if s.name == ship_type), self.ship_types[0])
+        self.ship = next(
+            (s for s in self.ship_types if s.name == 'Cobra MkIII'), self.ship_types[0]
+        )
         self.holdsize = self.ship.holdsize
         self.maxfuel = self.ship.maxfuel
         self.fuel = self.maxfuel
@@ -440,27 +538,35 @@ class Ship:
         self.cash = 100.0
         self.galaxynum = 1
         self.planetnum = 7  # Lave
+        self.criminal_record = 0
 
     def __str__(self):
-        return '''
-        {name}
-        Fuel : {fuel}/{maxfuel}
-        Cash : {cash}
-        Ship : {ship.name}
-        Hull : T{ship.hull} | Maneurability : CF{ship.maneur} | Velocity : {ship.velocity} | Crew : {ship.crew}
-        {ship.desc}
-        '''.format(name=self.ship.name,
-                   fuel=int(self.fuel), maxfuel=self.maxfuel,
-                   cash=int(self.cash), ship=self.ship)
+        return "Commander %s's %s" % (self.name, self.ship.name)
+
+    @property
+    def criminal_record_description(self):
+        """
+            0 -- Clean
+            1 -- Offender, stands for illegal goods dealers
+            2 -- Fugitive, killers, pirates, etc.
+        :return str:
+        """
+        return self.criminal_records[self.criminal_record]
 
     @property
     def cargosize(self):
-        """Return current size of cargo in tonnes"""
+        """
+        Return current size of cargo in tonnes.
+        :return int:
+        """
         return sum([self.cargo[c.name] * c.unit.mod for c in Market.commodities])
 
     @property
     def hold_remaining(self):
-        """Return how much space remains in the hold"""
+        """
+        Return how much space remains in the hold.
+        :return int:
+        """
         return self.holdsize - self.cargosize
 
 
@@ -471,25 +577,27 @@ class TradingGame:
         self.ship = Ship()
         self.galaxy = Galaxy()
         self.localmarket = None
-        self.generate_market()  # Since we want seed=0 for Lave
+        self._generate_market()  # Since we want seed=0 for Lave
 
     @property
     def current_system(self):
-        """Get the players current system"""
+        """
+        Get the players current system.
+        :return PlanSys:
+        """
         return self.galaxy.systems[self.ship.planetnum]
-
-    def generate_market(self, fluct=0):
-        self.localmarket = Market(self.current_system, fluct)
 
     def next_galaxy(self):
         """Galactic hyperspace to next galaxy"""
         self.galaxy.set_galaxy(self.galaxy.galaxy_number + 1)
-        self.generate_market()
-
-    def move_to(self, planet_sys):
-        self.ship.planetnum = planet_sys.num
+        self._generate_market()
 
     def jump(self, planetname):
+        """
+        Action. Jump to a current system.
+        :param planetname:
+        :return:
+        """
 
         def _char(value):
             value &= 255
@@ -497,7 +605,8 @@ class TradingGame:
                 return value - 256
             return value
 
-        distance, dest = self.galaxy.closest_system_like(self.current_system, planetname)
+        dest = self.galaxy.closest_system_like(self.current_system, planetname)
+        distance = self.galaxy.distance(self.current_system, dest)
         if dest is None:
             return False, "NAV ERROR: Planet not found!"
         if dest.name == self.current_system.name:
@@ -505,12 +614,18 @@ class TradingGame:
         if distance > self.ship.fuel:
             return False, "NAV ERROR: Not enough fuel for the jump!"
         self.ship.fuel -= distance
-        self.move_to(dest)
+        self.ship.planetnum = dest.num
         r = Randomizer.get_value()
-        self.generate_market(_char(r & 0xFF))
+        self._generate_market(_char(r & 0xFF))
         return True, "REPORT: Welcome to %s" % dest.name
 
     def dump(self, commod, amt):
+        """
+        Action. Dump goods from the cargo.
+        :param str commod: full or partial commodity name
+        :param int amt: commodity amount
+        :return Tuple[bool, str]: returns true in case of success and a report message
+        """
         commod = self.localmarket.find_by_name(commod)
         cargo = self.ship.cargo.get(commod.name)
         if not cargo:
@@ -524,6 +639,12 @@ class TradingGame:
         return True, msg
 
     def sell(self, commod, amt):
+        """
+        Action. Sell goods.
+        :param str commod: full or partial commodity name
+        :param int amt: commodity amount
+        :return Tuple[bool, str]: returns true in case of success and a report message
+        """
         commod = self.localmarket.find_by_name(commod)
         cargo = self.ship.cargo[commod.name]
         if cargo <= 0:
@@ -533,15 +654,23 @@ class TradingGame:
             # msg = "Only have {q}{u} to sell. Selling {q}{u}".format(q=cargo, u=commod.unit.name)
             amt = cargo
         local_market = self.localmarket.goods[commod.name]
-        price = amt * local_market.price * (1. - self.localmarket.selling_fee)
+        price = amt * self.localmarket.selling_price(local_market.price)
         msg = "REPORT: Selling {q}{u} of {name} for {p:.1f}".format(
             q=amt, u=commod.unit.name, name=commod.name, p=price)
         self.ship.cash += price
         self.ship.cargo[commod.name] -= int(amt)
         local_market.quantity += int(amt)
+        if all([not commod.is_legal, not self.ship.criminal_record, self.current_system.govtype > 2]):
+            self.ship.criminal_record = 1
         return True, msg
 
     def buy(self, commod, amt):
+        """
+        Action. Buy goods.
+        :param str commod: full or partial commodity name
+        :param int amt: commodity amount
+        :return Tuple[bool, str]: returns true in case of success and a report message
+        """
         commod = self.localmarket.find_by_name(commod)
         local_market = self.localmarket.goods[commod.name]
         lcl_amount = local_market.quantity
@@ -579,9 +708,14 @@ class TradingGame:
         return True, msg
 
     def buy_fuel(self):
+        """
+        Action. Buy fuel.
+        :return Tuple[bool, str]: returns true in case of success and a report message
+        """
         fuel_to_buy = self.ship.maxfuel - self.ship.fuel
         if fuel_to_buy <= 0:
-            msg = "ENG ERROR: Fuel tank is full ( %.0f tonnes / %.1f LY Range)" % (self.ship.fuel, self.ship.fuel * 0.1)
+            msg = "ENG ERROR: Fuel tank is full ( %.0f tonnes / %.1f LY Range)" % (
+                self.ship.fuel, self.ship.fuel * 0.1)
             return False, msg
         cost = self.current_system.fuelcost * fuel_to_buy
         if self.ship.cash <= 0:
@@ -597,6 +731,10 @@ class TradingGame:
         return True, msg
 
     def info_local_systems(self):
+        """
+        Action. Info on local sector.
+        :return tuple:
+        """
         head = 'short range chart'
         system_list = self.galaxy.systems_within(self.current_system, self.ship.maxfuel)
         choices = []
@@ -605,22 +743,32 @@ class TradingGame:
                 i = " * "
             else:
                 i = "-"
-            desc = (s.name, '{i:2}{d:<8.1f} {desc}'.format(i=i, d=d / 10., desc=s.description(short=True)))
+            desc = (s.name, '{:<2s} {:3.1f} {} {} {} {}'.format(
+                i, d * 0.1, s.name, s.techlev_description,
+                s.economy_description, s.government_description))
             choices.append((True, desc))
         return True, (head, choices)
 
     def info_commander(self):
+        """
+        Action. Info on the player status.
+        :return tuple:
+        """
         head = 'Commander %s' % self.ship.name
         desc = ('System:       %s' % self.current_system.name,
                 'Fuel:         %.1f Light Years' % (self.ship.fuel * 0.1),
                 'Cash:         %.1f Credits' % self.ship.cash,
-                'Legal Status: Clean',
+                'Legal Status: %s' % self.ship.criminal_record_description,
                 'Rating:       Harmless',
                 'Ship:         %s' % self.ship.ship.name,
                 'EQUIPMENT:',)
         return True, (head, desc)
 
     def info_equip(self):
+        """
+        Action. Info on player equipment and upgrades.
+        :return tuple:
+        """
         head = 'Equip ship %.1f Credits' % self.ship.cash
         desc = [
             (False, self.ship.ship.name),
@@ -632,14 +780,21 @@ class TradingGame:
         return True, (head, desc)
 
     def info_selected_system(self, name=None):
-        d, system = self.galaxy.closest_system_like(self.current_system, name)
+        """
+        Action. Info on a selected system.
+        :param str name: full or partial planet's name;
+            if None, returns the current system info
+        :return tuple:
+        """
+        system = self.galaxy.closest_system_like(self.current_system, name)
+        d = self.galaxy.distance(self.current_system, system)
         if not system:
             return False, 'NAV ERROR', ('System not found!!!',)
         head = 'Data on %s' % system.name
         desc = ('Distance:      %.1f Light Years' % (d * 0.1),
                 'Economy:       %s' % system.economy_description,
                 'Government:    %s' % system.government_description,
-                'Tech. Level:   %d' % system.techlev,
+                'Tech. Level:   %d' % system.techlev_description,
                 'Population:    %.1f Billion' % (system.population * 0.1),
                 'Productivity:  %d M CR' % system.productivity,
                 'Radius (Av):   %d km' % system.radius,
@@ -647,10 +802,16 @@ class TradingGame:
         return True, (head, desc)
 
     def info_galaxy(self):
+        """
+        Action. Map of the galaxy.
+        :return tuple:
+        """
         head = 'galactic chart %d' % self.galaxy.galaxy_number
         galaxy = [[' '] * 137 for _ in range(32)]
         player_pos, star, reachable = '>', '.', '*'
-        list_of_nearest = [s for d, s in self.galaxy.systems_within(self.current_system, self.ship.maxfuel)]
+        list_of_nearest = [
+            s for d, s in self.galaxy.systems_within(self.current_system, self.ship.maxfuel)
+            ]
         for s in self.galaxy.systems:
             if s in list_of_nearest:
                 x0, y0 = s.x // 2, s.y // 8
@@ -665,7 +826,12 @@ class TradingGame:
         return True, (head, galaxy)
 
     def info_cargo(self):
-        head = 'items %d / %d tonnes' % (self.ship.holdsize - self.ship.hold_remaining, self.ship.holdsize)
+        """
+        Action. Info on the player's ship cargo.
+        :return tuple:
+        """
+        head = 'items %d / %d tonnes' % (
+            self.ship.holdsize - self.ship.hold_remaining, self.ship.holdsize)
         choices = [
             (False, 'Fuel: %.1f Light Years' % (self.ship.fuel * 0.1)),
             (False, 'Cash: %.1f Credits' % self.ship.cash),
@@ -680,6 +846,10 @@ class TradingGame:
         return True, (head, choices)
 
     def info_buy(self):
+        """
+        Action. Info on the market buy menu.
+        :return tuple:
+        """
         head = 'buy cargo%5.1f Credits' % self.ship.cash
         data = [(False, 'PRODUCT         UNIT  PRICE / QTY')]
         for name, g in self.localmarket.goods.items():
@@ -689,26 +859,47 @@ class TradingGame:
         return True, (head, data)
 
     def info_sell(self):
+        """
+        Action. Info on the market sell menu.
+        :return tuple:
+        """
         head = 'sell cargo%5.1f Credits' % self.ship.cash
         data = [(False, 'PRODUCT         UNIT  PRICE / QTY')]
         for name, g in self.localmarket.goods.items():
             item = (name, '{n:16s} {u:3s} {b:5.1f} {q:5d}'.format(
-                n=name, u=g.commodity.unit.name, b=g.price * (1 - self.localmarket.selling_fee),
+                n=name, u=g.commodity.unit.name,
+                b=self.localmarket.selling_price(g.price),
                 q=self.ship.cargo[name]))
             data.append((True, item))
         return True, (head, data)
 
     def info_trade(self):
+        """
+        Action. Info on the market local trade menu.
+        :return tuple:
+        """
         head = '%s market prices' % self.current_system.name
         data = ['PRODUCT         UNIT  BUY / SELL']
         for name, g in self.localmarket.goods.items():
             data.append(
                 '{n:16s} {u:3s} {b:5.1f} {s:5.1f}'.format(
-                    n=name, u=g.commodity.unit.name, b=g.price, s=g.price * (1 - self.localmarket.selling_fee))
+                    n=name, u=g.commodity.unit.name, b=g.price,
+                    s=self.localmarket.selling_price(g.price))
             )
         return True, (head, data)
 
     def change_name(self, new_name):
+        """
+        Action. Set new player's name.
+        :param str new_name:
+        :return tuple:
+        """
         new_name = new_name.strip()
         if new_name:
             self.ship.name = new_name
+
+    def _generate_market(self, fluct=0):
+        """
+        :param int fluct: price fluctuation
+        """
+        self.localmarket = Market(self.current_system, fluct)
