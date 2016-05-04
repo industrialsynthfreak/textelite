@@ -72,8 +72,8 @@ class TradingGameCmd(Cmd):
         return self.do_local(line)
 
     def do_galhyp(self, line):
-        ret = self.game.next_galaxy()
-        print("You appear in galaxy %d" % self.game.galaxy.galaxy_number)
+        status, ret = self.game.hyperjump()
+        print(ret)
         return
 
     def do_mkt(self, line):
@@ -167,6 +167,11 @@ class TradingGameCmd(Cmd):
         print(msg)
         return
 
+    def do_upgrade(self, line):
+        status, msg = self.game.install_upgrade(line)
+        print(msg)
+        return
+
     def do_run(self, fname):
         import os
         if os.path.isfile(fname):
@@ -206,11 +211,12 @@ class TradingGameCmd(Cmd):
             fuel  (or f) [amount]              - buy amount LY of fuel
             jump  (or j) [planetname]          - hyperjump
             dump [tradegood] [amount]          - dump cargo into space
+            upgrade [upgrade name]             - buy and install upgrade
             local (or l) - list of planets within the ship hyperjump range
             mkt   (or m) - show local market
             cargo (or c) - show cargo bay
             com          - commander status
-            galhyp       - jump to a next galaxy
+            galhyp       - jump to the next galaxy
 
             /// OTHER /////
             intro (or h)   - display this text

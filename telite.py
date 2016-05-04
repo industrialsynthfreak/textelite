@@ -347,7 +347,7 @@ class Galaxy:
         if not name:
             return current_sys
         d = 9999
-        ret_system = None
+        ret_system = current_sys
         for planet_sys in self.systems:
             if planet_sys.name_starts_with(name):
                 dist = self.distance(current_sys, planet_sys)
@@ -368,6 +368,7 @@ class Galaxy:
             dist = self.distance(current, planet_sys)
             if dist <= max_ly_distance:
                 found.append((dist, planet_sys))
+        found.sort(key=lambda x: x[0])
         return found
 
     def _make_system(self, system_number):
@@ -524,6 +525,11 @@ class Ship:
     ship_types = (
         Ship('Cobra MkIII', 20, 70, ship_descriptions[0]),
     )
+    Upgrade = namedtuple('Upgrade', ['name', 'techlev', 'price', 'is_unique'])
+    ship_upgrades = (
+        Upgrade('cargo bay expansion', 1, 400., True),
+        Upgrade('galactic hyperdrive', 10, 5000., True),
+    )
     criminal_records = ('Clean', 'Offender', 'Fugitive')
 
     def __init__(self):
@@ -531,7 +537,7 @@ class Ship:
         self.ship = next(
             (s for s in self.ship_types if s.name == 'Cobra MkIII'), self.ship_types[0]
         )
-        self.holdsize = self.ship.holdsize
+        self._holdsize = self.ship.holdsize
         self.maxfuel = self.ship.maxfuel
         self.fuel = self.maxfuel
         self.cargo = OrderedDict([(c.name, 0) for c in Market.commodities])
@@ -539,9 +545,21 @@ class Ship:
         self.galaxynum = 1
         self.planetnum = 7  # Lave
         self.criminal_record = 0
+        self.upgrades = []
 
     def __str__(self):
         return "Commander %s's %s" % (self.name, self.ship.name)
+
+    @classmethod
+    def find_upgrade_by_name(cls, name):
+        """
+        :param str name:
+        :return Upgrade:
+        """
+        for u in cls.ship_upgrades:
+            if u.name.startswith(name.strip().lower()):
+                return u
+        return None
 
     @property
     def criminal_record_description(self):
@@ -552,6 +570,16 @@ class Ship:
         :return str:
         """
         return self.criminal_records[self.criminal_record]
+
+    @property
+    def holdsize(self):
+        """
+        Maximum cargo size including upgrades
+        :return int:
+        """
+        if 'cargo bay expansion' in self.upgrades:
+            return self._holdsize + 15
+        return self._holdsize
 
     @property
     def cargosize(self):
@@ -588,15 +616,26 @@ class TradingGame:
         return self.galaxy.systems[self.ship.planetnum]
 
     def next_galaxy(self):
-        """Galactic hyperspace to next galaxy"""
         self.galaxy.set_galaxy(self.galaxy.galaxy_number + 1)
         self._generate_market()
+
+    def hyperjump(self):
+        """
+        Action. Galactic hyperjump to the next galaxy.
+        :return tuple:
+        """
+        if 'galactic hyperdrive' not in self.ship.upgrades:
+            return False, "NAV ERROR: You don't have a galactic hyperdrive installed."
+        self.next_galaxy()
+        self.ship.criminal_record = 0
+        self.ship.upgrades.remove('galactic hyperdrive')
+        return True, "REPORT: Hyperjump successfull!"
 
     def jump(self, planetname):
         """
         Action. Jump to a current system.
         :param planetname:
-        :return:
+        :return tuple:
         """
 
         def _char(value):
@@ -730,6 +769,23 @@ class TradingGame:
             fuel_to_buy * 0.1, fuel_to_buy, cost)
         return True, msg
 
+    def install_upgrade(self, upgrade_name):
+        """
+        Action. Buy and install ship upgrade.
+        :param str upgrade_name:
+        :return tuple:
+        """
+        to_install = self.ship.find_upgrade_by_name(upgrade_name)
+        if to_install.is_unique and to_install.name in self.ship.upgrades:
+            return False, "ENG ERROR: Already installed."
+        if not to_install or self.current_system.techlev < to_install.techlev:
+            return False, 'MKT ERROR: There is no such upgrade at the market.'
+        if to_install.price > self.ship.cash:
+            return False, "MKT ERROR: You can't afford this."
+        self.ship.upgrades.append(to_install.name)
+        self.ship.cash -= to_install.price
+        return True, 'REPORT: %s succesfully installed' % to_install.name
+
     def info_local_systems(self):
         """
         Action. Info on local sector.
@@ -775,8 +831,12 @@ class TradingGame:
             (False, self.ship.ship.desc),
             (False, 'EQUIPMENT            BUY / SELL')
         ]
-        data = ('Fuel', 'Fuel (/Light Year) %.1f' % (self.ship.fuel * 0.1))
+        data = ('Fuel', 'Fuel (/Light Year) %5.1f' % (self.ship.fuel * 0.1))
         desc.append((True, data))
+        for u in Ship.ship_upgrades:
+            if u.techlev <= self.current_system.techlev:
+                data = (u.name, '%18s %5.1f' % (u.name.upper(), u.price))
+                desc.append((True, data))
         return True, (head, desc)
 
     def info_selected_system(self, name=None):
@@ -836,13 +896,13 @@ class TradingGame:
             (False, 'Fuel: %.1f Light Years' % (self.ship.fuel * 0.1)),
             (False, 'Cash: %.1f Credits' % self.ship.cash),
         ]
+        for u in self.ship.upgrades:
+            choices.append((False, "%s" % u.upper()))
         if self.ship.hold_remaining < self.ship.holdsize:
             choices.append((False, 'CARGO      DUMP'))
         for c, am in self.ship.cargo.items():
             if am:
-                choices.append(
-                    (True, (c, "%s %d" % (c, am)))
-                )
+                choices.append((True, (c, "%s %d" % (c, am))))
         return True, (head, choices)
 
     def info_buy(self):
@@ -850,7 +910,7 @@ class TradingGame:
         Action. Info on the market buy menu.
         :return tuple:
         """
-        head = 'buy cargo%5.1f Credits' % self.ship.cash
+        head = 'buy cargo %5.1f Credits' % self.ship.cash
         data = [(False, 'PRODUCT         UNIT  PRICE / QTY')]
         for name, g in self.localmarket.goods.items():
             item = (name, '{n:16s} {u:3s} {b:5.1f} {q:5d}'.format(
@@ -863,7 +923,7 @@ class TradingGame:
         Action. Info on the market sell menu.
         :return tuple:
         """
-        head = 'sell cargo%5.1f Credits' % self.ship.cash
+        head = 'sell cargo %5.1f Credits' % self.ship.cash
         data = [(False, 'PRODUCT         UNIT  PRICE / QTY')]
         for name, g in self.localmarket.goods.items():
             item = (name, '{n:16s} {u:3s} {b:5.1f} {q:5d}'.format(

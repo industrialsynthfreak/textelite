@@ -54,7 +54,10 @@ class Interface:
         self.info_head.widget_list = [urwid.Text(new_head.upper())]
 
     def _set_screen(self, new_menu, new_head):
-        self.info.widget_list = [new_menu]
+        if isinstance(new_menu, list):
+            self.info.widget_list = new_menu
+        else:
+            self.info.widget_list = [new_menu]
         self._set_head(new_head)
 
     def process_events(self, key):
@@ -135,9 +138,10 @@ class Interface:
         self.screen.focus_position = 2
 
     def do_upgrade(self, button=None, name=None):
-        status, msg = False, None
         if name.lower() == 'fuel':
             status, msg = self.game.buy_fuel()
+        else:
+            status, msg = self.game.install_upgrade(name.lower())
         if status:
             self.button_show_equip(button)
         self._set_head(msg)
@@ -145,8 +149,15 @@ class Interface:
     def button_show_galaxy(self, button=None):
         status, (head, desc) = self.game.info_galaxy()
         text = urwid.Text('\n'.join(desc))
-        self._set_screen(text, head)
+        b = urwid.Button('Hyperjump!', self.do_hyperjump)
+        self._set_screen([b, text], head)
         self.screen.focus_position = 0
+
+    def do_hyperjump(self, button=None):
+        status, msg = self.game.hyperjump()
+        if status:
+            self.button_show_galaxy(button)
+        self._set_head(msg)
 
     def button_show_locals(self, button=None):
         status, (head, desc) = self.game.info_local_systems()
