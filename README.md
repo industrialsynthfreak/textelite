@@ -41,7 +41,7 @@ python3 app.py
 Now you may use console commands for info, trading or travelling. You start at Lave like in the original game.
 
 # TODO
-- ship upgrades
-- smuggling mechanics
+- DONE: ship upgrades
+- DONE: smuggling mechanics
 - battle mechanics (?)
 - DONE: `ncurses` interface port

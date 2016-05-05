@@ -347,7 +347,7 @@ class Galaxy:
         if not name:
             return current_sys
         d = 9999
-        ret_system = current_sys
+        ret_system = None
         for planet_sys in self.systems:
             if planet_sys.name_starts_with(name):
                 dist = self.distance(current_sys, planet_sys)
@@ -529,6 +529,9 @@ class Ship:
     ship_upgrades = (
         Upgrade('cargo bay expansion', 1, 400., True),
         Upgrade('galactic hyperdrive', 10, 5000., True),
+        Upgrade('mining laser', 10, 800., True),
+        Upgrade('fuel scoops', 5, 525., True),
+        Upgrade('cpt.j.t.kirk portrait', 13, 100., True)
     )
     criminal_records = ('Clean', 'Offender', 'Fugitive')
 
@@ -546,6 +549,7 @@ class Ship:
         self.planetnum = 7  # Lave
         self.criminal_record = 0
         self.upgrades = []
+        self.banned_systems = set()
 
     def __str__(self):
         return "Commander %s's %s" % (self.name, self.ship.name)
@@ -572,6 +576,17 @@ class Ship:
         return self.criminal_records[self.criminal_record]
 
     @property
+    def banned_systems_description(self):
+        """
+        :return str:
+        """
+        s = [s.name.capitalize() for s in self.banned_systems]
+        s.sort()
+        if not s:
+            return 'None'
+        return ', '.join(s)
+
+    @property
     def holdsize(self):
         """
         Maximum cargo size including upgrades
@@ -587,7 +602,7 @@ class Ship:
         Return current size of cargo in tonnes.
         :return int:
         """
-        return sum([self.cargo[c.name] * c.unit.mod for c in Market.commodities])
+        return int(sum([self.cargo[c.name] * c.unit.mod for c in Market.commodities]))
 
     @property
     def hold_remaining(self):
@@ -626,10 +641,11 @@ class TradingGame:
         """
         if 'galactic hyperdrive' not in self.ship.upgrades:
             return False, "NAV ERROR: You don't have a galactic hyperdrive installed."
-        self.next_galaxy()
         self.ship.criminal_record = 0
+        self.ship.banned_systems.clear()
         self.ship.upgrades.remove('galactic hyperdrive')
-        return True, "REPORT: Hyperjump successfull!"
+        self.next_galaxy()
+        return True, "REPORT: Hyperjump successfull."
 
     def jump(self, planetname):
         """
@@ -645,18 +661,18 @@ class TradingGame:
             return value
 
         dest = self.galaxy.closest_system_like(self.current_system, planetname)
-        distance = self.galaxy.distance(self.current_system, dest)
         if dest is None:
-            return False, "NAV ERROR: Planet not found!"
+            return False, "NAV ERROR: Planet not found."
+        distance = self.galaxy.distance(self.current_system, dest)
         if dest.name == self.current_system.name:
-            return False, "NAV ERROR: Jump not possible!"
+            return False, "NAV ERROR: Jump not possible."
         if distance > self.ship.fuel:
-            return False, "NAV ERROR: Not enough fuel for the jump!"
+            return False, "NAV ERROR: Not enough fuel for the jump."
         self.ship.fuel -= distance
         self.ship.planetnum = dest.num
         r = Randomizer.get_value()
         self._generate_market(_char(r & 0xFF))
-        return True, "REPORT: Welcome to %s" % dest.name
+        return True, "REPORT: Welcome to %s." % dest.name
 
     def dump(self, commod, amt):
         """
@@ -668,12 +684,12 @@ class TradingGame:
         commod = self.localmarket.find_by_name(commod)
         cargo = self.ship.cargo.get(commod.name)
         if not cargo:
-            msg = "ENG ERROR: No %s available to dump into space" % commod.name
+            msg = "ENG ERROR: No %s available to dump into space." % commod.name
             return False, msg
         if amt > cargo:
             amt = cargo
         self.ship.cargo[commod.name] -= amt
-        msg = "REPORT: %.0f %s of %s successfully removed from the ship" % (
+        msg = "REPORT: %.0f %s of %s successfully removed from the ship." % (
             amt, commod.unit.name, commod.name)
         return True, msg
 
@@ -686,21 +702,29 @@ class TradingGame:
         """
         commod = self.localmarket.find_by_name(commod)
         cargo = self.ship.cargo[commod.name]
+        if self.current_system in self.ship.banned_systems and commod.is_legal:
+            return False, "MKT ERROR: May only sell blackmarket goods in systems you've been banned."
         if cargo <= 0:
-            msg = "FIN ERROR: No %s to sell." % commod.name
+            msg = "MKT ERROR: No %s to sell." % commod.name
             return False, msg
         if amt > cargo:
             # msg = "Only have {q}{u} to sell. Selling {q}{u}".format(q=cargo, u=commod.unit.name)
             amt = cargo
         local_market = self.localmarket.goods[commod.name]
         price = amt * self.localmarket.selling_price(local_market.price)
-        msg = "REPORT: Selling {q}{u} of {name} for {p:.1f}".format(
+        msg = "REPORT: Selling {q}{u} of {name} for {p:.1f}.".format(
             q=amt, u=commod.unit.name, name=commod.name, p=price)
         self.ship.cash += price
         self.ship.cargo[commod.name] -= int(amt)
         local_market.quantity += int(amt)
-        if all([not commod.is_legal, not self.ship.criminal_record, self.current_system.govtype > 2]):
-            self.ship.criminal_record = 1
+        if not commod.is_legal:
+            r = Randomizer.get_value() & 7
+            ban = 1 + r - self.current_system.govtype
+            if ban < 0:
+                self.ship.banned_systems.add(self.current_system)
+                msg += " You've been banned in %s for selling illegal goods." % self.current_system.name
+                if not self.ship.criminal_record:
+                    self.ship.criminal_record = 1
         return True, msg
 
     def buy(self, commod, amt):
@@ -713,8 +737,10 @@ class TradingGame:
         commod = self.localmarket.find_by_name(commod)
         local_market = self.localmarket.goods[commod.name]
         lcl_amount = local_market.quantity
+        if self.current_system in self.ship.banned_systems and commod.is_legal:
+            return False, "MKT ERROR: May only buy blackmarket goods in systems you've been banned."
         if lcl_amount == 0:
-            msg = "FIN ERROR: no %s on the market" % commod.name
+            msg = "MKT ERROR: no %s on the market." % commod.name
             return False, msg
         if amt > lcl_amount:
             # msg = "FIN ERROR: Could not buy {q}{u} attempting to buy maximum {q2}{u} instead.".format(
@@ -725,21 +751,21 @@ class TradingGame:
         else:
             can_have = int(self.ship.cash / local_market.price)
         if can_have <= 0:
-            msg = "FIN ERROR: Cannot afford any %s" % commod.name
+            msg = "MKT ERROR: Cannot afford any %s." % commod.name
             return False, msg
         if amt > can_have:
             amt = can_have
         if self.ship.hold_remaining < amt * commod.unit.mod:
             can_have = self.ship.hold_remaining
             if can_have <= 0:
-                msg = "ENG ERROR: No room in hold for any %s" % commod.name
+                msg = "ENG ERROR: No room in hold for any %s." % commod.name
                 return False, msg
             else:
                 # msg = "ENG ERROR: Could not fit {q}{u} into the hold. Reducing to {available}{u}".format(
                 # q=amt, u=commod.unit.name, available=can_have)
                 amt = can_have
         price = amt * local_market.price
-        msg = "REPORT: Buying {q}{u} of {name} for {p:.1f}".format(
+        msg = "REPORT: Buying {q}{u} of {name} for {p:.1f}.".format(
             q=amt, u=commod.unit.name, name=commod.name, p=price)
         self.ship.cash -= price
         self.ship.cargo[commod.name] += int(amt)
@@ -751,6 +777,9 @@ class TradingGame:
         Action. Buy fuel.
         :return Tuple[bool, str]: returns true in case of success and a report message
         """
+        if self.current_system in self.ship.banned_systems:
+            msg = "MKT ERROR: Can't refuel, because you're in %s's blacklist." % self.current_system.name
+            return False, msg
         fuel_to_buy = self.ship.maxfuel - self.ship.fuel
         if fuel_to_buy <= 0:
             msg = "ENG ERROR: Fuel tank is full ( %.0f tonnes / %.1f LY Range)" % (
@@ -759,7 +788,7 @@ class TradingGame:
         cost = self.current_system.fuelcost * fuel_to_buy
         if self.ship.cash <= 0:
             self.ship.cash = 0.
-            return False, "FIN ERROR: You can't afford any fuel"
+            return False, "MKT ERROR: You can't afford any fuel."
         if cost > self.ship.cash:
             fuel_to_buy = self.ship.cash / self.current_system.fuelcost
             cost = self.current_system.fuelcost * fuel_to_buy
@@ -784,7 +813,7 @@ class TradingGame:
             return False, "MKT ERROR: You can't afford this."
         self.ship.upgrades.append(to_install.name)
         self.ship.cash -= to_install.price
-        return True, 'REPORT: %s succesfully installed' % to_install.name
+        return True, 'REPORT: %s succesfully installed.' % to_install.name
 
     def info_local_systems(self):
         """
@@ -811,13 +840,17 @@ class TradingGame:
         :return tuple:
         """
         head = 'Commander %s' % self.ship.name
-        desc = ('System:       %s' % self.current_system.name,
-                'Fuel:         %.1f Light Years' % (self.ship.fuel * 0.1),
-                'Cash:         %.1f Credits' % self.ship.cash,
-                'Legal Status: %s' % self.ship.criminal_record_description,
-                'Rating:       Harmless',
-                'Ship:         %s' % self.ship.ship.name,
-                'EQUIPMENT:',)
+        desc = [(False, 'System:       %s' % self.current_system.name),
+                (False, 'Fuel:         %.1f Light Years' % (self.ship.fuel * 0.1)),
+                (False, 'Cash:         %.1f Credits' % self.ship.cash),
+                (False, 'Legal Status: %s' % self.ship.criminal_record_description),
+                (False, 'Blacklisted in %s' % self.ship.banned_systems_description),
+                (False, 'Rating:       Harmless'),
+                (False, 'Ship:         %s' % self.ship.ship.name)]
+        if self.ship.upgrades:
+            desc.append((False, 'EQUIPMENT   USE'))
+            for u in self.ship.upgrades:
+                desc.append((True, (u, "%s" % u.upper())))
         return True, (head, desc)
 
     def info_equip(self):
@@ -835,7 +868,7 @@ class TradingGame:
         desc.append((True, data))
         for u in Ship.ship_upgrades:
             if u.techlev <= self.current_system.techlev:
-                data = (u.name, '%18s %5.1f' % (u.name.upper(), u.price))
+                data = (u.name, '%-18s %5.1f' % (u.name.upper(), u.price))
                 desc.append((True, data))
         return True, (head, desc)
 
@@ -851,14 +884,16 @@ class TradingGame:
         if not system:
             return False, 'NAV ERROR', ('System not found!!!',)
         head = 'Data on %s' % system.name
-        desc = ('Distance:      %.1f Light Years' % (d * 0.1),
+        desc = ['Distance:      %.1f Light Years' % (d * 0.1),
                 'Economy:       %s' % system.economy_description,
                 'Government:    %s' % system.government_description,
                 'Tech. Level:   %d' % system.techlev_description,
                 'Population:    %.1f Billion' % (system.population * 0.1),
                 'Productivity:  %d M CR' % system.productivity,
                 'Radius (Av):   %d km' % system.radius,
-                '%s' % system.goatsoup,)
+                '%s\n' % system.goatsoup]
+        if system in self.ship.banned_systems:
+            desc.append("You've been blacklisted in this system.")
         return True, (head, desc)
 
     def info_galaxy(self):
@@ -868,7 +903,7 @@ class TradingGame:
         """
         head = 'galactic chart %d' % self.galaxy.galaxy_number
         galaxy = [[' '] * 137 for _ in range(32)]
-        player_pos, star, reachable = '>', '.', '*'
+        player_pos, star, reachable, blacklisted = '>', '.', '*', 'x'
         list_of_nearest = [
             s for d, s in self.galaxy.systems_within(self.current_system, self.ship.maxfuel)
             ]
@@ -877,7 +912,10 @@ class TradingGame:
                 x0, y0 = s.x // 2, s.y // 8
                 dx = len(s.name)
                 galaxy[y0][x0 + 1:x0 + dx] = list(s.name)
-                galaxy[y0][x0] = reachable
+                if s in self.ship.banned_systems:
+                    galaxy[y0][x0] = blacklisted
+                else:
+                    galaxy[y0][x0] = reachable
             else:
                 galaxy[s.y // 8][s.x // 2] = star
         x0, y0 = self.current_system.x // 2, self.current_system.y // 8
@@ -896,8 +934,6 @@ class TradingGame:
             (False, 'Fuel: %.1f Light Years' % (self.ship.fuel * 0.1)),
             (False, 'Cash: %.1f Credits' % self.ship.cash),
         ]
-        for u in self.ship.upgrades:
-            choices.append((False, "%s" % u.upper()))
         if self.ship.hold_remaining < self.ship.holdsize:
             choices.append((False, 'CARGO      DUMP'))
         for c, am in self.ship.cargo.items():
@@ -912,7 +948,12 @@ class TradingGame:
         """
         head = 'buy cargo %5.1f Credits' % self.ship.cash
         data = [(False, 'PRODUCT         UNIT  PRICE / QTY')]
+        blacklisted = False
+        if self.current_system in self.ship.banned_systems:
+            blacklisted = True
         for name, g in self.localmarket.goods.items():
+            if blacklisted and g.commodity.is_legal:
+                continue
             item = (name, '{n:16s} {u:3s} {b:5.1f} {q:5d}'.format(
                 n=name, u=g.commodity.unit.name, b=g.price, q=g.quantity))
             data.append((True, item))
@@ -925,7 +966,12 @@ class TradingGame:
         """
         head = 'sell cargo %5.1f Credits' % self.ship.cash
         data = [(False, 'PRODUCT         UNIT  PRICE / QTY')]
+        blacklisted = False
+        if self.current_system in self.ship.banned_systems:
+            blacklisted = True
         for name, g in self.localmarket.goods.items():
+            if blacklisted and g.commodity.is_legal:
+                continue
             item = (name, '{n:16s} {u:3s} {b:5.1f} {q:5d}'.format(
                 n=name, u=g.commodity.unit.name,
                 b=self.localmarket.selling_price(g.price),
@@ -957,6 +1003,66 @@ class TradingGame:
         new_name = new_name.strip()
         if new_name:
             self.ship.name = new_name
+
+    def use_equipment(self, name):
+        """
+        Action. Use a ship equipment.
+        :param str name: partial or full name
+        :return tuple:
+        """
+        eq = self.ship.find_upgrade_by_name(name)
+        if eq.name == 'mining laser':
+            status, msg = self.mining()
+        elif eq.name == 'fuel scoops':
+            status, msg = self.refuelling()
+        elif eq.name == 'galactic hyperdrive':
+            status, msg = self.hyperjump()
+        elif eq.name not in self.ship.upgrades:
+            status, msg = False, 'ENG ERROR: %s not installed.' % eq.name
+        else:
+            status, msg = True, "You looked at %s. Nice!" % eq.name
+        return status, msg
+
+    def refuelling(self):
+        """
+        Action. Refuelling.
+        Might be suitable for smugglers, but I'm still no shure what disadvantages
+        it should have compared to purchasing fuel.
+        """
+        if 'fuel scoops' not in self.ship.upgrades:
+            return False, 'ENG ERROR: No refuelling equipment installed, aborting.'
+        if self.ship.fuel >= self.ship.maxfuel:
+            return False, 'ENG ERROR: The fuel tanks are full, commander.'
+        needed_fuel = int(self.ship.maxfuel - self.ship.fuel)
+        r = Randomizer.get_value() & 7
+        prod = 1 + r
+        if prod > needed_fuel:
+            prod = needed_fuel
+        self.ship.fuel += prod
+        return True, "REPORT: You've collected %d tons of fuel from the nearest star." % prod
+
+    def mining(self):
+        """
+        Action. Mining operation in the system.
+        :return tuple:
+        """
+        fuel_use = 30
+        if 'mining laser' not in self.ship.upgrades:
+            return False, 'ENG ERROR: Mining equipment not installed.'
+        if self.ship.fuel < fuel_use:
+            return False, 'ENG ERROR: You need at least %d t of fuel for mining.' % fuel_use
+        if not self.ship.hold_remaining:
+            return False, 'ENG ERROR: There is no free cargo space available.'
+        self.ship.fuel -= fuel_use
+        prod = int((21 - self.current_system.techlev - self.current_system.economy) & 3)
+        if prod <= 0:
+            return True, 'REPORT: It seems, that there is no asteroids in this sector.'
+        r = Randomizer.get_value() & 3
+        prod += r
+        if self.ship.hold_remaining < prod:
+            prod = self.ship.hold_remaining
+        self.ship.cargo['Minerals'] += prod
+        return True, 'REPRORT: We extracted %d tons of ore, commander.' % prod
 
     def _generate_market(self, fluct=0):
         """

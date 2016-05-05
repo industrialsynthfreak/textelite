@@ -114,6 +114,7 @@ class Interface:
         status, msg = self.game.sell(name, amt=1)
         if status:
             self.button_show_sell(button)
+            focus = min(focus, len(self.info.widget_list[-1].widget_list)-1)
             self.info.widget_list[-1].focus_position = focus
         self._set_head(msg)
 
@@ -128,6 +129,7 @@ class Interface:
         status, msg = self.game.buy(name, amt=1)
         if status:
             self.button_show_buy(button)
+            focus = min(focus, len(self.info.widget_list[-1].widget_list)-1)
             self.info.widget_list[-1].focus_position = focus
         self._set_head(msg)
 
@@ -177,17 +179,29 @@ class Interface:
             self._set_head(message)
         self.screen.focus_position = 0
 
-    def button_show_status(self, button=None):
-        status, (head, desc) = self.game.info_commander()
+    def button_show_market(self, button=None):
+        status, (head, desc) = self.game.info_trade()
         menu = urwid.Text('\n'.join(desc))
         self._set_screen(menu, head)
         self.screen.focus_position = 0
 
-    def button_show_market(self, button=None):
-        status, (head, desc) = self.game.info_trade()
-        text = urwid.Text('\n'.join(desc))
-        self._set_screen(text, head)
-        self.screen.focus_position = 0
+    def button_show_status(self, button=None):
+        status, (head, desc) = self.game.info_commander()
+        menu = urwid.Pile(self._create_button_list(desc, self.do_use))
+        self._set_screen(menu, head)
+        if not any((d[0] for d in desc)):
+            self.screen.focus_position = 0
+        else:
+            self.screen.focus_position = 2
+
+    def do_use(self, button=None, name=None):
+        focus = self.info.widget_list[-1].focus_position
+        status, msg = self.game.use_equipment(name)
+        if status:
+            self.button_show_status(button)
+            if len(self.info.widget_list[-1].widget_list) > focus:
+                self.info.widget_list[-1].focus_position = focus
+        self._set_head(msg)
 
     def button_show_cargo(self, button=None):
         status, (head, desc) = self.game.info_cargo()
