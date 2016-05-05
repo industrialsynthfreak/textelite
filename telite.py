@@ -544,7 +544,7 @@ class Ship:
         self.maxfuel = self.ship.maxfuel
         self.fuel = self.maxfuel
         self.cargo = OrderedDict([(c.name, 0) for c in Market.commodities])
-        self.cash = 10000.0
+        self.cash = 100.0
         self.galaxynum = 1
         self.planetnum = 7  # Lave
         self.criminal_record = 0
