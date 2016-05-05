@@ -34,7 +34,8 @@ You can always preview these flags by typing:
 python3 app_cursed.py -h
 ```
 Working flags:
-- -s  visual style (for terminals supporting 16+ colors); values: `dark`, `light` or `norton`
+- `-s [style name]` - visual style (for terminals supporting 16+ colors); values: `dark`, `light` or `norton`
+- `-m [value, 1-4]` - the galactic map scale (default is 2)
 
 ## Screenshots
 ![Screen1](https://raw.githubusercontent.com/industrialsynthfreak/textelite/master/screenshots/screen1.png "Galaxy")

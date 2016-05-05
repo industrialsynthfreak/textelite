@@ -16,6 +16,7 @@ class Interface:
                      ('button', 'white, bold', 'dark red')]
     }
     palette = styles['dark']
+    map_scale = 2
 
     def _create_command_menu(self):
         f1 = urwid.Button('Jump', on_press=self.button_show_jump)
@@ -150,7 +151,7 @@ class Interface:
         self._set_head(msg)
 
     def button_show_galaxy(self, button=None):
-        status, (head, desc) = self.game.info_galaxy()
+        status, (head, desc) = self.game.info_galaxy(scale=self.map_scale)
         text = urwid.Text('\n'.join(desc))
         b = urwid.Button('Hyperjump!', self.do_hyperjump)
         self._set_screen([b, text], head)
@@ -229,9 +230,12 @@ class Interface:
     def _parse_init_args(self):
         argparser = argparse.ArgumentParser()
         argparser.add_argument("-s", help="specify a visual style: %s" % ', '.join(self.styles.keys()))
+        argparser.add_argument("-m", help="specify the galaxy map scale, %d is default" % self.map_scale, type=int)
         args = argparser.parse_args()
         if args.s and args.s in self.styles:
             self.palette = self.styles[args.s]
+        if args.m and 1 <= args.m <=4:
+            self.map_scale = args.m
 
     def __init__(self):
         self.game = TradingGame()

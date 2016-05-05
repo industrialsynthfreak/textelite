@@ -897,20 +897,23 @@ class TradingGame:
             desc.append("You've been blacklisted in this system.")
         return True, (head, desc)
 
-    def info_galaxy(self):
+    def info_galaxy(self, scale=2):
         """
         Action. Map of the galaxy.
+        :scale int: scale of the galaxy map (lower is better)
         :return tuple:
         """
+        scale_x, scale_y = scale, scale * 4
+        size_x, size_y = self.galaxy.galaxy_size // scale_x, self.galaxy.galaxy_size // scale_y
         head = 'galactic chart %d' % self.galaxy.galaxy_number
-        galaxy = [[' '] * 137 for _ in range(32)]
         player_pos, star, reachable, blacklisted = '>', '.', '*', 'x'
+        galaxy = [[' '] * (size_x + 12) for _ in range(size_y + 1)]
         list_of_nearest = [
             s for d, s in self.galaxy.systems_within(self.current_system, self.ship.maxfuel)
             ]
         for s in self.galaxy.systems:
             if s in list_of_nearest:
-                x0, y0 = s.x // 2, s.y // 8
+                x0, y0 = s.x // scale_x, s.y // scale_y
                 dx = len(s.name)
                 galaxy[y0][x0 + 1:x0 + dx] = list(s.name)
                 if s in self.ship.banned_systems:
@@ -918,10 +921,13 @@ class TradingGame:
                 else:
                     galaxy[y0][x0] = reachable
             else:
-                galaxy[s.y // 8][s.x // 2] = star
-        x0, y0 = self.current_system.x // 2, self.current_system.y // 8
+                galaxy[s.y // scale_y][s.x // scale_x] = star
+        x0, y0 = self.current_system.x // scale_x, self.current_system.y // scale_y
         galaxy[y0][x0] = player_pos
         galaxy = [''.join(row) for row in galaxy]
+        legend = "%s - you are here, %s - star, %s - reachable star, %s - reachable but blacklisted" % (
+            player_pos, star, reachable, blacklisted)
+        galaxy.append(legend)
         return True, (head, galaxy)
 
     def info_cargo(self):
