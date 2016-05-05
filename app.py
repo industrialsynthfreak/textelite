@@ -139,9 +139,12 @@ class TradingGameCmd(Cmd):
     def do_com(self, line):
         status, msg = self.game.info_commander()
         if status:
-            (head, info) = msg
+            head, info = msg
             print(head.upper())
-            print('\n'.join(info))
+            for __, desc in info:
+                if __:
+                    name, desc = desc
+                print(''.join(desc))
         return
 
     def do_cargo(self, line):
@@ -171,6 +174,14 @@ class TradingGameCmd(Cmd):
         status, msg = self.game.install_upgrade(line)
         print(msg)
         return
+
+    def do_use(self, line):
+        status, msg = self.game.use_equipment(line)
+        print(msg)
+        return
+
+    def do_u(self, line):
+        return self.do_use(line)
 
     def do_run(self, fname):
         import os
@@ -205,12 +216,13 @@ class TradingGameCmd(Cmd):
             Available commands:
 
             /// CONTROLS ///
-            info  (or i) [planetname]          - planet information
-            buy   (or b) [tradegood] [amount]  - buy from a local store
-            sell  (or s) [tradegood] [amount]  - sell to a local store
+            info  (or i) [planet name]         - planet information
+            buy   (or b) [trade good] [amount] - buy from a local store
+            sell  (or s) [trade good] [amount] - sell to a local store
             fuel  (or f) [amount]              - buy amount LY of fuel
-            jump  (or j) [planetname]          - hyperjump
-            dump [tradegood] [amount]          - dump cargo into space
+            jump  (or j) [planet name]         - hyperjump
+            use   (or u) [equipment name]      - use installed equipment
+            dump [trade good] [amount]         - dump cargo into space
             upgrade [upgrade name]             - buy and install upgrade
             local (or l) - list of planets within the ship hyperjump range
             mkt   (or m) - show local market
