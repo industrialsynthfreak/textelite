@@ -1,68 +1,59 @@
 #!/usr/bin/python3
+"""
+This is ncurses (urwid) based console interface for textelite.
+It should work fine on any modern posix console.
+The interface provide more flexibility such as menus, buttons, color schemes.
+"""
 import argparse
 
 import urwid
 
 from telite import TradingGame
 
+__VERSION__ = '1.0'
+
 
 class Interface:
+    """Console interface class"""
     styles = {
         'dark': [('info', 'dark green', 'black'),
                  ('button', 'light cyan, bold', 'dark blue')],
         'norton': [('info', 'light gray', 'dark blue'),
                    ('button', 'white, bold', 'dark blue')],
         'light': [('info', 'black', 'light gray'),
-                     ('button', 'white, bold', 'dark red')]
+                  ('button', 'white, bold', 'dark red')]
     }
     palette = styles['dark']
     map_scale = 2
 
-    def _create_command_menu(self):
-        f1 = urwid.Button('Jump', on_press=self.button_show_jump)
-        f2 = urwid.Button('Sell', on_press=self.button_show_sell)
-        f3 = urwid.Button('Buy', on_press=self.button_show_buy)
-        f4 = urwid.Button('Upgrade', on_press=self.button_show_equip)
-        f5 = urwid.Button('Galaxy', on_press=self.button_show_galaxy)
-        f6 = urwid.Button('Locals', on_press=self.button_show_locals)
-        f7 = urwid.Button('System', on_press=self.button_show_planet_info)
-        f8 = urwid.Button('Market', on_press=self.button_show_market)
-        f9 = urwid.Button('Status', on_press=self.button_show_status)
-        f0 = urwid.Button('Cargo', on_press=self.button_show_cargo)
-        buttons = [f1, f2, f3, f4, f5, f6, f7, f8, f9, f0]
-        buttons = (urwid.AttrMap(b, 'button') for b in buttons)
-        menu = urwid.Columns(buttons)
-        menu.focus_position = 8
-        return menu
+    def __init__(self):
+        self.game = TradingGame()
 
-    def _show_question_box(self, text):
-        question = urwid.Edit(text)
-        self.info_head.widget_list.append(question)
-        urwid.connect_signal(question, 'change', self.process_question)
-        self.screen.focus_position = 1
-        self.info_head.focus_position = 1
+        self._parse_init_args()
+        self.question = 'NAME'
+        self.selected_system = None
+        self.menu = self._create_command_menu()
+        self.info_head = urwid.Pile([urwid.Text(u'')])
+        self.info = urwid.Pile([urwid.Text(u'')])
+        self.screen = urwid.Pile([self.menu, self.info_head, self.info])
+        self.button_show_status()
+        self.do_question_change_name()
+        self.fill = urwid.Filler(self.screen, 'top')
+        self.fill = urwid.AttrMap(self.fill, 'info')
+        self.loop = urwid.MainLoop(self.fill, palette=self.palette, unhandled_input=self.process_events)
+        self.loop.screen.set_terminal_properties(colors=16)
 
-    def _create_button_list(self, data, function):
-        buttons = []
-        for status, msg in data:
-            if status:
-                n, d = msg
-                buttons.append(urwid.Button(d, on_press=function, user_data=n))
-            else:
-                buttons.append(urwid.Text(msg))
-        return buttons
+    def run(self):
+        """Run the game."""
+        self.loop.run()
 
-    def _set_head(self, new_head):
-        self.info_head.widget_list = [urwid.Text(new_head.upper())]
-
-    def _set_screen(self, new_menu, new_head):
-        if isinstance(new_menu, list):
-            self.info.widget_list = new_menu
-        else:
-            self.info.widget_list = [new_menu]
-        self._set_head(new_head)
+    @staticmethod
+    def do_terminate():
+        """Quit the game."""
+        raise urwid.ExitMainLoop()
 
     def process_events(self, key):
+        """Keys processing."""
         binds = {
             'esc': self.do_terminate,
             '1': self.button_show_jump,
@@ -80,6 +71,7 @@ class Interface:
             return binds[key]()
 
     def process_question(self, edit=None, text=None):
+        """Question box text processing (used only for commander's name input)"""
         if text.endswith(' '):
             self.info_head.widget_list.pop(-1)
             self.screen.focus_position = 0
@@ -88,9 +80,9 @@ class Interface:
                 self.button_show_status()
             self.question = None
 
-    @staticmethod
-    def do_terminate():
-        raise urwid.ExitMainLoop()
+    def do_question_change_name(self):
+        self.question = 'NAME'
+        self._show_question_box('Enter your name, commander: ')
 
     def button_show_jump(self, button=None):
         status, (head, desc) = self.game.info_local_systems()
@@ -116,7 +108,7 @@ class Interface:
         status, msg = self.game.sell(name, amt=1)
         if status:
             self.button_show_sell(button)
-            focus = min(focus, len(self.info.widget_list[-1].widget_list)-1)
+            focus = min(focus, len(self.info.widget_list[-1].widget_list) - 1)
             self.info.widget_list[-1].focus_position = focus
         self._set_head(msg)
 
@@ -131,7 +123,7 @@ class Interface:
         status, msg = self.game.buy(name, amt=1)
         if status:
             self.button_show_buy(button)
-            focus = min(focus, len(self.info.widget_list[-1].widget_list)-1)
+            focus = min(focus, len(self.info.widget_list[-1].widget_list) - 1)
             self.info.widget_list[-1].focus_position = focus
         self._set_head(msg)
 
@@ -223,39 +215,63 @@ class Interface:
                 self.info.widget_list[-1].focus_position = focus
         self._set_head(msg)
 
-    def do_question_change_name(self):
-        self.question = 'NAME'
-        self._show_question_box('Enter your name, commander: ')
+    def _create_command_menu(self):
+        """Construct the game menu buttons."""
+        f1 = urwid.Button('Jump', on_press=self.button_show_jump)
+        f2 = urwid.Button('Sell', on_press=self.button_show_sell)
+        f3 = urwid.Button('Buy', on_press=self.button_show_buy)
+        f4 = urwid.Button('Upgrade', on_press=self.button_show_equip)
+        f5 = urwid.Button('Galaxy', on_press=self.button_show_galaxy)
+        f6 = urwid.Button('Locals', on_press=self.button_show_locals)
+        f7 = urwid.Button('System', on_press=self.button_show_planet_info)
+        f8 = urwid.Button('Market', on_press=self.button_show_market)
+        f9 = urwid.Button('Status', on_press=self.button_show_status)
+        f0 = urwid.Button('Cargo', on_press=self.button_show_cargo)
+        buttons = [f1, f2, f3, f4, f5, f6, f7, f8, f9, f0]
+        buttons = (urwid.AttrMap(b, 'button') for b in buttons)
+        menu = urwid.Columns(buttons)
+        menu.focus_position = 8
+        return menu
+
+    def _show_question_box(self, text):
+        """Construct a question box with a text input."""
+        question = urwid.Edit(text)
+        self.info_head.widget_list.append(question)
+        urwid.connect_signal(question, 'change', self.process_question)
+        self.screen.focus_position = 1
+        self.info_head.focus_position = 1
+
+    def _create_button_list(self, data, function):
+        """Construct a vertical list of buttons."""
+        buttons = []
+        for status, msg in data:
+            if status:
+                n, d = msg
+                buttons.append(urwid.Button(d, on_press=function, user_data=n))
+            else:
+                buttons.append(urwid.Text(msg))
+        return buttons
+
+    def _set_head(self, new_head):
+        self.info_head.widget_list = [urwid.Text(new_head.upper())]
+
+    def _set_screen(self, new_menu, new_head):
+        if isinstance(new_menu, list):
+            self.info.widget_list = new_menu
+        else:
+            self.info.widget_list = [new_menu]
+        self._set_head(new_head)
 
     def _parse_init_args(self):
+        """Argparse function."""
         argparser = argparse.ArgumentParser()
         argparser.add_argument("-s", help="specify a visual style: %s" % ', '.join(self.styles.keys()))
         argparser.add_argument("-m", help="specify the galaxy map scale, %d is default" % self.map_scale, type=int)
         args = argparser.parse_args()
         if args.s and args.s in self.styles:
             self.palette = self.styles[args.s]
-        if args.m and 1 <= args.m <=4:
+        if args.m and 1 <= args.m <= 4:
             self.map_scale = args.m
-
-    def __init__(self):
-        self.game = TradingGame()
-
-        self._parse_init_args()
-        self.question = 'NAME'
-        self.selected_system = None
-        self.menu = self._create_command_menu()
-        self.info_head = urwid.Pile([urwid.Text(u'')])
-        self.info = urwid.Pile([urwid.Text(u'')])
-        self.screen = urwid.Pile([self.menu, self.info_head, self.info])
-        self.button_show_status()
-        self.do_question_change_name()
-        self.fill = urwid.Filler(self.screen, 'top')
-        self.fill = urwid.AttrMap(self.fill, 'info')
-        self.loop = urwid.MainLoop(self.fill, palette=self.palette, unhandled_input=self.process_events)
-        self.loop.screen.set_terminal_properties(colors=16)
-
-    def run(self):
-        self.loop.run()
 
 
 if __name__ == "__main__":

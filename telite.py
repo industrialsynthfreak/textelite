@@ -1,3 +1,7 @@
+"""
+Textelite game engine.
+Provides generators and in-game classes.
+"""
 from collections import namedtuple, OrderedDict
 
 
