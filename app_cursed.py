@@ -1,4 +1,6 @@
 #!/usr/bin/python3
+import argparse
+
 import urwid
 
 from telite import TradingGame
@@ -8,10 +10,12 @@ class Interface:
     styles = {
         'dark': [('info', 'dark green', 'black'),
                  ('button', 'light cyan, bold', 'dark blue')],
+        'norton': [('info', 'light gray', 'dark blue'),
+                   ('button', 'white, bold', 'dark blue')],
         'light': [('info', 'black', 'light gray'),
-                  ('button', 'light red, bold', 'light gray')]
+                     ('button', 'white, bold', 'dark red')]
     }
-    palette = None
+    palette = styles['dark']
 
     def _create_command_menu(self):
         f1 = urwid.Button('Jump', on_press=self.button_show_jump)
@@ -29,9 +33,6 @@ class Interface:
         menu = urwid.Columns(buttons)
         menu.focus_position = 8
         return menu
-
-    def _set_palette(self, palette: str):
-        self.palette = self.styles.get(palette)
 
     def _show_question_box(self, text):
         question = urwid.Edit(text)
@@ -225,9 +226,18 @@ class Interface:
         self.question = 'NAME'
         self._show_question_box('Enter your name, commander: ')
 
+    def _parse_init_args(self):
+        argparser = argparse.ArgumentParser()
+        argparser.add_argument("-s", help="specify a visual style: %s" % ', '.join(self.styles.keys()))
+        args = argparser.parse_args()
+        if args.s and args.s in self.styles:
+            self.palette = self.styles[args.s]
+
     def __init__(self):
-        self.question = 'NAME'
         self.game = TradingGame()
+
+        self._parse_init_args()
+        self.question = 'NAME'
         self.selected_system = None
         self.menu = self._create_command_menu()
         self.info_head = urwid.Pile([urwid.Text(u'')])
@@ -235,7 +245,6 @@ class Interface:
         self.screen = urwid.Pile([self.menu, self.info_head, self.info])
         self.button_show_status()
         self.do_question_change_name()
-        self._set_palette('dark')
         self.fill = urwid.Filler(self.screen, 'top')
         self.fill = urwid.AttrMap(self.fill, 'info')
         self.loop = urwid.MainLoop(self.fill, palette=self.palette, unhandled_input=self.process_events)

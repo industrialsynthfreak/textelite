@@ -844,9 +844,10 @@ class TradingGame:
                 (False, 'Fuel:         %.1f Light Years' % (self.ship.fuel * 0.1)),
                 (False, 'Cash:         %.1f Credits' % self.ship.cash),
                 (False, 'Legal Status: %s' % self.ship.criminal_record_description),
-                (False, 'Blacklisted in %s' % self.ship.banned_systems_description),
                 (False, 'Rating:       Harmless'),
                 (False, 'Ship:         %s' % self.ship.ship.name)]
+        if self.ship.banned_systems:
+            desc.append((False, 'Blacklisted in %s' % self.ship.banned_systems_description))
         if self.ship.upgrades:
             desc.append((False, 'EQUIPMENT   USE'))
             for u in self.ship.upgrades:

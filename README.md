@@ -28,6 +28,14 @@ It's recommended to set quite a big console window for this mode (otherwise the 
 - space - press a button
 - esc - quit
 
+## Command line flags
+You can always preview these flags by typing:
+```
+python3 app_cursed.py -h
+```
+Working flags:
+- -s  visual style (for terminals supporting 16+ colors); values: `dark`, `light` or `norton`
+
 ## Screenshots
 ![Screen1](https://raw.githubusercontent.com/industrialsynthfreak/textelite/master/screenshots/screen1.png "Galaxy")
 ![Screen2](https://raw.githubusercontent.com/industrialsynthfreak/textelite/master/screenshots/screen2.png "Local sector")
